@@ -36,6 +36,17 @@ Kazane targets:
 
 The first UI is web-based. Future GUI direction should allow a shared macOS/Linux desktop experience, likely through a cross-platform shell such as Tauri or another Rust/WebView-based architecture.
 
+## Development methodology
+
+Kazane is developed through Prototype First, TDD/Test First, T-RDE, and an Agile-inspired Kanban workflow linked to GitHub Issues.
+
+- Prototype First is used to test workflow and UI assumptions before durable implementation.
+- TDD / Test First is used when behavior and data models become durable.
+- T-RDE, Test-based Resonant Deviation Evaluator, checks whether changes preserve the intended meaning of the original context.
+- Kanban is used as the operational flow, while GitHub Issues remain the durable work record.
+
+See [docs/development-methodology.md](docs/development-methodology.md), [docs/testing-strategy.md](docs/testing-strategy.md), [docs/t-rde-policy.md](docs/t-rde-policy.md), and [docs/issue-kanban-workflow.md](docs/issue-kanban-workflow.md).
+
 ## Design principles
 
 1. Prefer context sovereignty over automation.
@@ -66,15 +77,15 @@ See [docs/roadmap.md](docs/roadmap.md).
 
 ## Repository and branch policy
 
-The repository is public. The `main` branch is treated as protected and must not be written to directly. Changes should be prepared on feature branches and merged through pull requests after review.
+The repository is public. The `main` branch is treated as protected and is not used as a direct working branch. Changes should be prepared on feature branches and merged through pull requests after review.
 
-See [docs/adr/0009-protected-main-branch.md](docs/adr/0009-protected-main-branch.md).
+See [docs/adr/0009-branch-management.md](docs/adr/0009-branch-management.md).
 
 ## License
 
 Kazane uses AGPL-3.0-or-later for the public repository, with a provisional future commercial licensing option under consideration.
 
-See [LICENSE](LICENSE), [NOTICE](NOTICE), [LICENSE-POLICY.md](LICENSE-POLICY.md), and [docs/adr/0007-license-strategy-provisional.md](docs/adr/0007-license-strategy-provisional.md).
+See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md), [LICENSE-POLICY.md](LICENSE-POLICY.md), and [docs/adr/0007-license-strategy-provisional.md](docs/adr/0007-license-strategy-provisional.md).
 
 ## Public positioning
 
