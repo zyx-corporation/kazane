@@ -29,12 +29,18 @@ Kazane is also not initially a large enterprise workflow suite. The first implem
 
 ## Initial operating environments
 
-Kazane targets:
+Kazane is Tauri-first from the prototype stage.
+
+Initial targets:
 
 - macOS
 - Linux
 
-The first UI is web-based. Future GUI direction should allow a shared macOS/Linux desktop experience, likely through a cross-platform shell such as Tauri or another Rust/WebView-based architecture.
+Also in view:
+
+- iOS
+
+The previous direction of "Web UI first, desktop unification later" has been withdrawn. Even prototypes should be built as Tauri-based applications where practical, using web technologies inside Tauri while treating the Tauri runtime, local app shell, permissions, and cross-platform packaging as part of the initial product learning.
 
 ## Development methodology
 
@@ -68,7 +74,7 @@ Kazane is at conceptual/prototype stage.
 
 The intended release path starts with:
 
-- `v0.0 kiri / 霧`: concept and six-screen prototype
+- `v0.0 kiri / 霧`: Tauri-based concept and six-screen prototype
 - `v0.1 shirushi / 記し`: internal MVP for recording work origins and context
 - `v0.2 nagare / 流れ`: AI agents pick up assigned business work and return handoffs
 - `v0.3 tsuzuri / 綴り`: work, conversations, decisions, and outputs are woven into traceable history
