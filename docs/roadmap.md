@@ -4,8 +4,8 @@
 
 | Version | Release name | Stage | Main purpose |
 |---|---|---|---|
-| v0.0 | kiri / 霧 | Concept prototype | Confirm six-screen concept and product direction |
-| v0.1 | shirushi / 記し | Internal MVP | Record work origins, context, and initial Work Items |
+| v0.0 | kiri / 霧 | Tauri concept prototype | Confirm six-screen concept and product direction inside Tauri |
+| v0.1 | shirushi / 記し | Internal Tauri MVP | Record work origins, context, and initial Work Items |
 | v0.2 | nagare / 流れ | AI flow alpha | Agents pick up assigned business work and return Handoff Notes |
 | v0.3 | tsuzuri / 綴り | Provenance alpha | Weave work, decisions, evidence, and context updates into traceable history |
 | v0.4 | michi / 道 | Development workflow proof | Validate GitHub/CLI/MCP-oriented development workflows |
@@ -14,11 +14,26 @@
 | v0.7 | musubi / 結び | AI番頭 integration | Connect mail, calendar, documents, meetings, and customer context |
 | v0.8 | hibiki / 響き | External beta | Validate human–AI organizational workflows with partners and small businesses |
 | v0.9 | utsuwa / 器 | Product candidate | Prepare onboarding, permissions, deployment, and product materials |
-| v1.0 | kanade / 奏で | First public release | Provide Kazane as an AI-era work operating system |
+| v1.0 | kanade / 奏で | First public release | Provide Kazane as a Tauri-based AI-era work operating system |
+
+## Runtime direction
+
+Kazane is Tauri-first from the prototype stage.
+
+Initial targets:
+
+- macOS
+- Linux
+
+Future target in view:
+
+- iOS
+
+The previous Web UI first direction has been withdrawn. Web technologies may still be used inside Tauri, but the product boundary is the Tauri application.
 
 ## v0.0 kiri / 霧
 
-Concept and six-screen prototype.
+Tauri-based concept and six-screen prototype.
 
 Deliverables:
 
@@ -28,17 +43,21 @@ Deliverables:
 - roadmap;
 - licensing policy draft;
 - initial ADRs;
-- six-screen prototype.
+- Tauri scaffold;
+- six-screen prototype inside Tauri.
 
 Exit criteria:
 
 - product scope is not limited to development;
 - public positioning is clear;
-- initial document structure exists.
+- initial document structure exists;
+- Tauri runs on at least one macOS machine;
+- Linux build path is identified;
+- iOS constraints are noted but not implemented.
 
 ## v0.1 shirushi / 記し
 
-Internal MVP for recording work origin.
+Internal Tauri MVP for recording work origin.
 
 Features:
 
@@ -48,13 +67,15 @@ Features:
 - human/agent actor field;
 - manual status transitions;
 - local storage;
-- Markdown/JSON export.
+- Markdown/JSON export;
+- Tauri command layer for local operations.
 
 Exit criteria:
 
 - at least 10 Kazane/ZYX internal Work Items recorded;
 - at least one top-level Kazane Design Strategy Context exists;
-- work origin is readable later.
+- work origin is readable later;
+- macOS and Linux runtime assumptions are tested or documented.
 
 ## v0.2 nagare / 流れ
 
@@ -64,6 +85,7 @@ Features:
 
 - agent-assigned Work Item pickup;
 - CLI or file-based queue;
+- Tauri command bridge for local agent workflow;
 - Handoff Note submission;
 - Needs Human status;
 - simple scheduled scans;
@@ -212,8 +234,8 @@ Promise:
 - manage human–AI work flows;
 - preserve context and provenance;
 - support handoffs, escalation, evidence, and review;
-- support macOS/Linux;
-- web UI first;
+- support macOS/Linux through Tauri;
+- maintain iOS as a visible future target;
 - local-first deployment path.
 
 Non-promise:
@@ -222,4 +244,5 @@ Non-promise:
 - replacement for legal/accounting/medical experts;
 - enterprise-grade workflow suite;
 - fully hosted SaaS by default;
-- objective guarantee of audit correctness.
+- objective guarantee of audit correctness;
+- full iOS feature parity at v1.0.
