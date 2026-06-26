@@ -1,3 +1,11 @@
+# Node
+node_modules/
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
