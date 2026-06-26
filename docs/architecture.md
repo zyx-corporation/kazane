@@ -4,20 +4,22 @@
 
 Kazane is a human–AI work operating system. It is not limited to development. It manages workflows across business functions wherever AI agents can assist.
 
+This file provides the short conceptual overview. The expanded multi-plane structure is defined in [architecture-v2.md](architecture-v2.md). Security details are defined in [security-architecture.md](security-architecture.md).
+
 ## Initial platform assumptions
+
+Kazane is Tauri-first from the prototype stage.
 
 Runtime targets:
 
 - macOS
 - Linux
 
-Initial UI:
+Future target in view:
 
-- web UI
+- iOS
 
-Future GUI:
-
-- shared macOS/Linux GUI, likely using a cross-platform desktop shell.
+The product may use web technologies inside Tauri, but the runtime boundary is the Tauri application, not a browser-only Web UI.
 
 ## Conceptual architecture
 
@@ -25,19 +27,19 @@ Future GUI:
 Human Operators
       │
       ▼
-Flow Dashboard ───── Ops Health
+Tauri GUI / Remote GUI ─ Access / Auth
       │
       ▼
-Work Board ──────── Handoff System
-      │                  │
-      ▼                  ▼
-Context Engine ─── Evidence Log
-      │                  │
-      ▼                  ▼
-Agent Organization ─ Review / RDE Audit
+Local Orchestrator ───── Privilege Manager
+      │                       │
+      ▼                       ▼
+Work Board ─ Context ─ Evidence ─ Audit
       │
       ▼
-Agent Runtime / CLI / MCP / Local Tools
+Local / Remote Agent Runtime
+      │
+      ▼
+Connectors / Models / Tools
 ```
 
 ## Core modules
@@ -57,6 +59,14 @@ Work Items may represent development issues, customer email, sales follow-up, do
 Stores shared organizational memory and work context.
 
 Context types include project context, customer context, design strategy, business context, technical context, brand/voice context, operations context, risk/legal context, agent manuals, handoff context, and RDE context.
+
+### Local Orchestrator
+
+Owns work state, dispatch, leases, context linkage, handoff intake, evidence intake, and escalation.
+
+### Privilege Manager
+
+Owns typed privileged operations, policy checks, secret access, approval flow, and audit events.
 
 ### Agent Organization
 
