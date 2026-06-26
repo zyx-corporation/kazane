@@ -1,0 +1,3 @@
+# ADR 0007
+
+See [LICENSE-POLICY.md](../../LICENSE-POLICY.md).
