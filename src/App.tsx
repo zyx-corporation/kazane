@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, EnrichedWorkItem } from './types';
+import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
 import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData } from './data/seed';
-import { dbListItems, dbUpsertItem, dbDeleteItem } from './db';
+import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { WorkItemDrawer } from './components/WorkItemDrawer';
 import { NewWorkItemModal } from './components/NewWorkItemModal';
+import { NewContextCardModal } from './components/NewContextCardModal';
 import { FlowDashboard } from './screens/FlowDashboard';
 import { WorkBoard } from './screens/WorkBoard';
 import { ContextCards } from './screens/ContextCards';
@@ -24,7 +25,6 @@ const SCREEN_LABELS: Record<Screen, string> = {
   rde: 'RDE / Evidence Audit',
 };
 
-// running in Tauri native app?
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 function loadLangFromStorage(): Lang {
@@ -55,20 +55,35 @@ function nextId(items: WorkItem[]): string {
   return 'WI-' + String((Math.max(0, ...nums) + 1)).padStart(3, '0');
 }
 
+function nextCtxId(ctxs: ContextCard[]): string {
+  const nums = ctxs.map(c => parseInt(c.id.replace('CTX-', ''), 10)).filter(n => !isNaN(n));
+  return 'CTX-' + String((Math.max(0, ...nums) + 1)).padStart(3, '0');
+}
+
 function colStatus(col: BoardCol): string {
   return COL_NAMES[col];
+}
+
+function downloadJson(data: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [items, setItems] = useState<WorkItem[]>(loadItemsFromStorage() ?? seedItems);
+  const [contexts, setContexts] = useState<ContextCard[]>(seedContexts);
   const [dbReady, setDbReady] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
   const [tab, setTab] = useState<DrawerTab>('context');
   const [ctxSel, setCtxSel] = useState('CTX-018');
   const [hoSel, setHoSel] = useState('HO-31');
   const [gateDomain, setGateDomain] = useState('all');
-  const [modalOpen, setModalOpen] = useState(false);
+  const [wiModalOpen, setWiModalOpen] = useState(false);
+  const [ctxModalOpen, setCtxModalOpen] = useState(false);
   const [form, setForm] = useState({ title: '', domain: '顧客対応', assignee: 'AI番頭' });
   const [toast, setToast] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => loadLangFromStorage());
@@ -80,33 +95,30 @@ export default function App() {
   const enriched: EnrichedWorkItem[] = items.map(enrichItem);
   const selItem = enriched.find(i => i.id === selId) ?? null;
 
-  // Load from SQLite on mount (Tauri only); seed DB if empty
+  // Load from SQLite on mount (Tauri only)
   useEffect(() => {
     if (!IS_TAURI) return;
     let cancelled = false;
-    dbListItems().then(rows => {
+    Promise.all([dbListItems(), dbListContextCards()]).then(([rows, ctxRows]) => {
       if (cancelled) return;
       if (rows.length > 0) {
         setItems(rows);
       } else {
-        // Seed DB with initial data
-        Promise.all(seedItems.map(si => dbUpsertItem(si))).then(() => {
-          if (!cancelled) setItems(seedItems);
-        });
+        Promise.all(seedItems.map(si => dbUpsertItem(si)));
+      }
+      if (ctxRows.length > 0) {
+        setContexts(ctxRows);
+      } else {
+        Promise.all(seedContexts.map(c => dbUpsertContextCard(c)));
       }
       setDbReady(true);
-    }).catch(() => {
-      if (!cancelled) setDbReady(false);
-    });
+    }).catch(() => { if (!cancelled) setDbReady(false); });
     return () => { cancelled = true; };
   }, []);
 
-  // Persist single item to DB (Tauri) or full list to localStorage
   const persist = useCallback((updated: WorkItem[], changed?: WorkItem) => {
     persistLocal(updated);
-    if (IS_TAURI && dbReady && changed) {
-      dbUpsertItem(changed).catch(() => {});
-    }
+    if (IS_TAURI && dbReady && changed) dbUpsertItem(changed).catch(() => {});
   }, [dbReady]);
 
   function flash(msg: string) {
@@ -128,8 +140,7 @@ export default function App() {
       changed = { ...i, col, status: colStatus(col), bounced: col === 'human' ? true : i.bounced, nextAction: col === 'done' ? '完了・記録済' : i.nextAction };
       return changed;
     });
-    setItems(updated);
-    persist(updated, changed);
+    setItems(updated); persist(updated, changed);
     flash(t.toastMoved.replace('{id}', id).replace('{status}', colStatus(col)));
   }
 
@@ -142,8 +153,7 @@ export default function App() {
       changed = { ...i, rde: true, rdeAudit: i.rdeAudit ?? { kept: '仕事の主旨を維持。', transformed: '実施内容を要約・構造化。', unresolved: '監査者の確認待ち項目。' } };
       return changed;
     });
-    setItems(updated);
-    persist(updated, changed);
+    setItems(updated); persist(updated, changed);
     setScreen('rde'); setSelId(null);
     flash(t.toastRde.replace('{id}', id));
   }
@@ -157,8 +167,7 @@ export default function App() {
       aiChanged = { ...i, col: 'ai' as BoardCol, status: colStatus('ai') };
       return aiChanged;
     });
-    setItems(aiUpdated);
-    persist(aiUpdated, aiChanged);
+    setItems(aiUpdated); persist(aiUpdated, aiChanged);
     flash(t.toastMoved.replace('{id}', id).replace('{status}', colStatus('ai')));
     if (aiTimer.current) clearTimeout(aiTimer.current);
     aiTimer.current = setTimeout(() => {
@@ -180,6 +189,25 @@ export default function App() {
     }, 1400);
   }
 
+  function editItem(id: string, patch: { title: string; domain: string; assignee: string }) {
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== id) return i;
+      changed = { ...i, ...patch };
+      return changed;
+    });
+    setItems(updated); persist(updated, changed);
+    flash(t.toastEdited.replace('{id}', id));
+  }
+
+  function deleteItem(id: string) {
+    const updated = items.filter(i => i.id !== id);
+    setItems(updated); persistLocal(updated);
+    if (IS_TAURI && dbReady) dbDeleteItem(id).catch(() => {});
+    setSelId(null);
+    flash(t.toastDeleted.replace('{id}', id));
+  }
+
   function addItem(partial: Partial<WorkItem> & { title: string; domain: string; assignee: string }) {
     const id = nextId(items);
     const isAI = isAiActor(partial.assignee);
@@ -194,9 +222,8 @@ export default function App() {
       ...partial,
     };
     const updated = [it, ...items];
-    setItems(updated);
-    persist(updated, it);
-    setModalOpen(false);
+    setItems(updated); persist(updated, it);
+    setWiModalOpen(false);
     flash(t.toastAdded.replace('{id}', id));
   }
 
@@ -205,9 +232,37 @@ export default function App() {
     addItem({ title: form.title.trim(), domain: form.domain, assignee: form.assignee });
   }
 
+  function addContext(title: string, question: string) {
+    const id = nextCtxId(contexts);
+    const card: ContextCard = {
+      id, title, question,
+      purpose: '目的を記入。', context: '', constraint: '制約を記入。',
+      past: '', relatedWI: [], relatedEv: [], unresolved: [], nextPolicy: '担当が随時更新。',
+    };
+    const updated = [card, ...contexts];
+    setContexts(updated);
+    if (IS_TAURI && dbReady) dbUpsertContextCard(card).catch(() => {});
+    setCtxModalOpen(false);
+    setCtxSel(id);
+    setScreen('context');
+    flash(`${id} Context Card を追加しました`);
+  }
+
   function promoteUnresolved(text: string, domain: string, contextId: string) {
     addItem({ title: text + '（未解決点から）', domain: domain || '調査', assignee: 'AI Assistant', contextId });
     setScreen('board');
+  }
+
+  function goCtxById(id: string) {
+    setCtxSel(id);
+    setScreen('context');
+    setSelId(null);
+  }
+
+  function exportItems() {
+    const ts = new Date().toISOString().slice(0, 10);
+    downloadJson({ exportedAt: new Date().toISOString(), workItems: items, contextCards: contexts }, `kazane-export-${ts}.json`);
+    flash(t.toastExported);
   }
 
   function changeLang(l: Lang) {
@@ -221,10 +276,12 @@ export default function App() {
         const current = await dbListItems();
         await Promise.all(current.map(i => dbDeleteItem(i.id)));
         await Promise.all(seedItems.map(si => dbUpsertItem(si)));
+        await Promise.all(seedContexts.map(c => dbUpsertContextCard(c)));
       } catch (_) {}
     }
     try { localStorage.setItem('kazane_items', JSON.stringify(seedItems)); } catch (_) {}
-    setItems(seedItems); setSelId(null); setModalOpen(false);
+    setItems(seedItems); setContexts(seedContexts);
+    setSelId(null); setWiModalOpen(false); setCtxModalOpen(false);
     flash(t.btnReset);
   }
 
@@ -247,7 +304,6 @@ export default function App() {
             <span style={{ color: '#9aa1ad' }}>{SCREEN_LABELS[screen]}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Language switcher */}
             <div style={{ position: 'relative' }}>
               <button onClick={() => setLangOpen(!langOpen)} style={s.langBtn}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa1ad" strokeWidth="2">
@@ -269,9 +325,9 @@ export default function App() {
                 </div>
               )}
             </div>
-            <button style={s.headerBtn}>{t.btnActivityLog}</button>
+            <button onClick={exportItems} style={s.headerBtn}>{t.btnExportReport}</button>
             <button onClick={resetDemo} style={s.headerBtn}>{t.btnReset}</button>
-            <button onClick={() => { setModalOpen(true); setForm({ title: '', domain: '顧客対応', assignee: 'AI番頭' }); }} style={s.newItemBtn}>{t.btnNewItem}</button>
+            <button onClick={() => { setWiModalOpen(true); setForm({ title: '', domain: '顧客対応', assignee: 'AI番頭' }); }} style={s.newItemBtn}>{t.btnNewItem}</button>
           </div>
         </header>
 
@@ -280,11 +336,12 @@ export default function App() {
           {screen === 'dashboard' && <FlowDashboard items={enriched} t={t} onOpenItem={openItem} onNav={nav} />}
           {screen === 'board' && <WorkBoard items={enriched} t={t} onOpenItem={openItem} />}
           {screen === 'context' && (
-            <ContextCards contexts={seedContexts} ctxSel={ctxSel} t={t}
+            <ContextCards contexts={contexts} ctxSel={ctxSel} t={t}
               onSelectCtx={setCtxSel}
               onPromoteUnresolved={promoteUnresolved}
               onGoBoard={() => nav('board')}
               onGoRde={() => nav('rde')}
+              onAddCtx={() => setCtxModalOpen(true)}
             />
           )}
           {screen === 'handoff' && (
@@ -301,6 +358,7 @@ export default function App() {
             <RdeEvidenceAudit rdeEvidence={rdeEvidenceData} t={t}
               onPromoteRde={() => promoteUnresolved('業務領域別テンプレート', '調査', 'CTX-002')}
               onGoCtx={() => nav('context')}
+              onExport={exportItems}
             />
           )}
         </div>
@@ -316,7 +374,10 @@ export default function App() {
           onBounce={bounce}
           onRunRde={runRde}
           onAiRun={aiRun}
+          onEditItem={editItem}
+          onDeleteItem={deleteItem}
           onGoCtx={() => { nav('context'); }}
+          onGoCtxById={goCtxById}
           onGoHand={() => { nav('handoff'); }}
           onGoRde={() => { nav('rde'); }}
           onGoGate={() => { nav('gate'); }}
@@ -324,12 +385,21 @@ export default function App() {
       )}
 
       {/* New Work Item Modal */}
-      {modalOpen && (
+      {wiModalOpen && (
         <NewWorkItemModal
           form={form} t={t}
-          onClose={() => setModalOpen(false)}
+          onClose={() => setWiModalOpen(false)}
           onSetField={(k, v) => setForm(f => ({ ...f, [k]: v }))}
           onSubmit={submitForm}
+        />
+      )}
+
+      {/* New Context Card Modal */}
+      {ctxModalOpen && (
+        <NewContextCardModal
+          t={t}
+          onClose={() => setCtxModalOpen(false)}
+          onSubmit={addContext}
         />
       )}
 

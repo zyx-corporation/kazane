@@ -7,9 +7,10 @@ interface RdeEvidenceAuditProps {
   t: Translations;
   onPromoteRde: () => void;
   onGoCtx: () => void;
+  onExport: () => void;
 }
 
-export function RdeEvidenceAudit({ rdeEvidence, t, onPromoteRde, onGoCtx }: RdeEvidenceAuditProps) {
+export function RdeEvidenceAudit({ rdeEvidence, t, onPromoteRde, onGoCtx, onExport }: RdeEvidenceAuditProps) {
   const rdeRows = [
     { label: t.rdeKept, value: 'AIと人間の協働、Handoff、Gate、Evidence、RDEの基本構造は維持。', bg: '#161d18', border: '#25382b', labelColor: '#5fb89f', valueColor: '#cfe0d6' },
     { label: t.rdeTransformed, value: '開発運用OSから、業務フロー全般の知的協働OSへ拡張。', bg: '#141b27', border: '#24344a', labelColor: '#5b8def', valueColor: '#c7d8f3' },
@@ -48,7 +49,7 @@ export function RdeEvidenceAudit({ rdeEvidence, t, onPromoteRde, onGoCtx }: RdeE
             <button style={s.primaryBtn}>{t.btnRunRdeAudit}</button>
             <button onClick={onPromoteRde} style={s.warnBtn}>{t.btnPromoteUnresolved}</button>
             <button onClick={onGoCtx} style={s.secondaryBtn}>{t.btnUpdCtxCard}</button>
-            <button style={s.secondaryBtn}>{t.btnExportReport}</button>
+            <button onClick={onExport} style={s.secondaryBtn}>{t.btnExportReport}</button>
           </div>
         </div>
 

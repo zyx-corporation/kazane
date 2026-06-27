@@ -9,9 +9,10 @@ interface ContextCardsProps {
   onPromoteUnresolved: (text: string, domain: string, contextId: string) => void;
   onGoBoard: () => void;
   onGoRde: () => void;
+  onAddCtx: () => void;
 }
 
-export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnresolved, onGoBoard, onGoRde }: ContextCardsProps) {
+export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnresolved, onGoBoard, onGoRde, onAddCtx }: ContextCardsProps) {
   const sel = contexts.find(c => c.id === ctxSel) ?? contexts[0];
 
   return (
@@ -93,7 +94,7 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
               <div style={s.nextPolicy}><span style={{ color: '#6a7078' }}>{t.nextPolicy}</span> {sel.nextPolicy}</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={onGoBoard} style={s.secondaryBtn}>{t.btnConnectWI}</button>
-                <button style={s.primaryBtn}>{t.btnCreateCtx}</button>
+                <button onClick={onAddCtx} style={s.primaryBtn}>{t.btnCreateCtx}</button>
               </div>
             </div>
           </div>

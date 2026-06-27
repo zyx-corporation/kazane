@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import type { EnrichedWorkItem, DrawerTab, BoardCol } from '../types';
-import { trustColor, isAiActor } from '../types';
+import { trustColor, isAiActor, DOMAIN_COLORS, AI_ACTORS } from '../types';
 import type { Translations } from '../i18n';
 
 const COL_LIST: { key: BoardCol; name: string; color: string }[] = [
@@ -18,6 +19,8 @@ const TABS: { key: DrawerTab; tKey: keyof Translations }[] = [
   { key: 'gate', tKey: 'tabGate' },
 ];
 
+const DOMAINS = Object.keys(DOMAIN_COLORS);
+
 interface WorkItemDrawerProps {
   item: EnrichedWorkItem;
   tab: DrawerTab;
@@ -28,16 +31,39 @@ interface WorkItemDrawerProps {
   onBounce: (id: string) => void;
   onRunRde: (id: string) => void;
   onAiRun: (id: string) => void;
+  onEditItem: (id: string, patch: { title: string; domain: string; assignee: string }) => void;
+  onDeleteItem: (id: string) => void;
   onGoCtx: () => void;
+  onGoCtxById: (id: string) => void;
   onGoHand: () => void;
   onGoRde: () => void;
   onGoGate: () => void;
 }
 
-export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onGoCtx, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onEditItem, onDeleteItem, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee });
+
   const canAiRun = isAiActor(item.assignee) && (item.col === 'inbox' || item.col === 'ai');
   const hasRde = !!(item.rde && item.rdeAudit);
+  const hasCtx = item.contextId && item.contextId !== '—';
   const ev = (item.ev || []).map(e => ({ ...e, trustColor: trustColor(e.trust) }));
+
+  function saveEdit() {
+    onEditItem(item.id, draft);
+    setEditing(false);
+  }
+
+  function cancelEdit() {
+    setDraft({ title: item.title, domain: item.domain, assignee: item.assignee });
+    setEditing(false);
+  }
+
+  function handleDelete() {
+    if (window.confirm(`${item.id} を削除しますか？`)) {
+      onDeleteItem(item.id);
+    }
+  }
 
   return (
     <div style={s.overlay}>
@@ -46,19 +72,61 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
         {/* Header */}
         <div style={s.drawerHeader}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <span style={s.mono}>{item.id} · {item.contextId}</span>
-            <button onClick={onClose} style={s.closeBtn}>×</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={s.mono}>{item.id}</span>
+              {hasCtx ? (
+                <button onClick={() => onGoCtxById(item.contextId)} style={s.ctxIdBtn}>
+                  {item.contextId} →
+                </button>
+              ) : (
+                <span style={{ ...s.mono, color: '#4a5268' }}>·</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {!editing && (
+                <button onClick={() => { setDraft({ title: item.title, domain: item.domain, assignee: item.assignee }); setEditing(true); }} style={s.iconBtn} title={t.btnEdit}>✏</button>
+              )}
+              <button onClick={handleDelete} style={{ ...s.iconBtn, color: '#d96b6b' }} title={t.btnDelete}>🗑</button>
+              <button onClick={onClose} style={s.closeBtn}>×</button>
+            </div>
           </div>
-          <h2 style={s.drawerTitle}>{item.title}</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#aeb4bf' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.dc }} />{item.domain}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#aeb4bf' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.actorColor }} />{item.assignee}
-            </span>
-            <span style={{ fontSize: 10, color: item.colColor, border: `1px solid ${item.colColor}`, padding: '2px 9px', borderRadius: 20 }}>{item.status}</span>
-          </div>
+
+          {editing ? (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                value={draft.title}
+                onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                style={s.editInput}
+                onKeyDown={e => e.key === 'Enter' && saveEdit()}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select value={draft.domain} onChange={e => setDraft(d => ({ ...d, domain: e.target.value }))} style={s.editSelect}>
+                  {DOMAINS.map(dm => <option key={dm} value={dm}>{dm}</option>)}
+                </select>
+                <select value={draft.assignee} onChange={e => setDraft(d => ({ ...d, assignee: e.target.value }))} style={s.editSelect}>
+                  {[...AI_ACTORS, 'Tomoyuki Kano', '山田 太郎', '中山 誠'].map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 7 }}>
+                <button onClick={saveEdit} style={s.saveBtn}>{t.btnSave}</button>
+                <button onClick={cancelEdit} style={s.cancelEditBtn}>{t.btnCancel}</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h2 style={s.drawerTitle}>{item.title}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#aeb4bf' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.dc }} />{item.domain}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#aeb4bf' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.actorColor }} />{item.assignee}
+                </span>
+                <span style={{ fontSize: 10, color: item.colColor, border: `1px solid ${item.colColor}`, padding: '2px 9px', borderRadius: 20 }}>{item.status}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Tabs */}
@@ -84,7 +152,10 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
               {item.ctx.context && <Field label={t.flContext} value={item.ctx.context} />}
               <Box bg="#1d1b14" border="#34301f" label={t.flConstraint} labelColor="#d9a93f" value={item.ctx.constraint} valueColor="#e3d2a6" />
               <Field label={t.flUnresolved} value={item.ctx.unresolved} />
-              <button onClick={onGoCtx} style={s.linkBtn}>{t.openCtxFull}</button>
+              {hasCtx
+                ? <button onClick={() => onGoCtxById(item.contextId)} style={s.linkBtn}>{t.goCtxCard}</button>
+                : <button onClick={onGoCtx} style={s.linkBtn}>{t.openCtxFull}</button>
+              }
             </div>
           )}
           {tab === 'handoff' && (
@@ -204,6 +275,8 @@ const s: Record<string, React.CSSProperties> = {
   mono: { fontSize: 10, color: '#7e8590', fontFamily: "'JetBrains Mono', monospace" },
   monoSm: { fontSize: 10, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 7 },
   closeBtn: { border: 'none', background: 'transparent', color: '#7e8590', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 },
+  iconBtn: { border: 'none', background: 'transparent', color: '#7e8590', fontSize: 13, cursor: 'pointer', lineHeight: 1, padding: '2px 4px' },
+  ctxIdBtn: { border: 'none', background: 'transparent', color: '#7c9fd4', fontSize: 10, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', padding: 0, textDecoration: 'underline' },
   tabBar: { display: 'flex', gap: 4, padding: '10px 14px', borderBottom: '1px solid #262a33', overflowX: 'auto', flexShrink: 0 },
   tabContent: { flex: 1, overflowY: 'auto', padding: '18px 20px' },
   stack: { display: 'flex', flexDirection: 'column', gap: 13 },
@@ -213,4 +286,8 @@ const s: Record<string, React.CSSProperties> = {
   footerActions: { padding: '12px 20px 14px', display: 'flex', gap: 8, flexShrink: 0 },
   bounceBtn: { flex: 1, border: '1px solid #3a2329', background: '#1f1417', color: '#e7bccb', padding: 9, borderRadius: 8, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
   rdeBtn: { flex: 1, border: 'none', background: '#5848a0', color: '#fff', padding: 9, borderRadius: 8, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
+  editInput: { width: '100%', background: '#1b1e25', border: '1px solid #3a4556', borderRadius: 7, color: '#e6e8ec', fontSize: 14, fontWeight: 600, padding: '7px 10px', fontFamily: 'inherit', boxSizing: 'border-box' as const },
+  editSelect: { flex: 1, background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 7, color: '#c8cdd5', fontSize: 12, padding: '6px 8px', fontFamily: 'inherit' },
+  saveBtn: { flex: 1, border: 'none', background: '#3b6fd4', color: '#fff', padding: '7px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' },
+  cancelEditBtn: { flex: 1, border: '1px solid #2d323d', background: '#1b1e25', color: '#9aa1ad', padding: '7px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' },
 };

@@ -40,6 +40,12 @@ export interface Translations {
   toastAdded: string; toastMoved: string; toastRde: string; toastNeedTitle: string;
   btnAiRun: string; toastAiStopped: string; toastAiDone: string;
   hoAutoDid: string; hoAutoUncertain: string; hoAutoNext: string;
+  // v0.1 additions
+  btnEdit: string; btnSave: string; btnDelete: string;
+  toastEdited: string; toastDeleted: string; toastExported: string;
+  newCtxModalTitle: string; fCtxTitle: string; fCtxQuestion: string;
+  ctxTitlePh: string; ctxQuestionPh: string; btnAddCtx: string;
+  goCtxCard: string;
 }
 
 const T: Record<Lang, Translations> = {
@@ -81,6 +87,11 @@ const T: Record<Lang, Translations> = {
     toastAdded: '{id} を Inbox に追加しました', toastMoved: '{id} → {status}', toastRde: '{id} を RDE 監査に送りました', toastNeedTitle: 'タイトルを入力してください',
     btnAiRun: 'AIに実行させる（自動）', toastAiStopped: '{id}：AIが停止 → {status}（Handoff記録）', toastAiDone: '{id}：AIが完了、Handoffを記録',
     hoAutoDid: 'AIが関連情報を整理し、作業案を作成。', hoAutoUncertain: '一部に人間の確認が必要な判断が含まれる。', hoAutoNext: '人間が責任境界を確認し、承認する。',
+    btnEdit: '編集', btnSave: '保存', btnDelete: '削除',
+    toastEdited: '{id} を更新しました', toastDeleted: '{id} を削除しました', toastExported: 'エクスポート完了',
+    newCtxModalTitle: 'Context Card 新規作成', fCtxTitle: 'タイトル', fCtxQuestion: '問い（この仕事が生まれた問い）',
+    ctxTitlePh: '例：顧客との合意形成プロセス', ctxQuestionPh: '例：なぜこの案件は合意に時間がかかっているのか？', btnAddCtx: 'Context Card を追加',
+    goCtxCard: 'Context Card を開く →',
   },
   en: {
     tagline1: 'Hear the signals of work,', tagline2: 'chronicle the lineage of decisions.',
@@ -120,6 +131,11 @@ const T: Record<Lang, Translations> = {
     toastAdded: '{id} added to Inbox', toastMoved: '{id} → {status}', toastRde: '{id} sent to RDE audit', toastNeedTitle: 'Please enter a title',
     btnAiRun: 'Run with AI (auto)', toastAiStopped: '{id}: AI stopped → {status} (Handoff logged)', toastAiDone: '{id}: AI finished, Handoff logged',
     hoAutoDid: 'AI organized the context and drafted the work.', hoAutoUncertain: 'Some judgments require human confirmation.', hoAutoNext: 'A human reviews the responsibility line and approves.',
+    btnEdit: 'Edit', btnSave: 'Save', btnDelete: 'Delete',
+    toastEdited: '{id} updated', toastDeleted: '{id} deleted', toastExported: 'Export complete',
+    newCtxModalTitle: 'New Context Card', fCtxTitle: 'Title', fCtxQuestion: 'Question (what created this work)',
+    ctxTitlePh: 'e.g. Customer agreement process', ctxQuestionPh: 'e.g. Why is consensus taking so long?', btnAddCtx: 'Add Context Card',
+    goCtxCard: 'Open Context Card →',
   },
   zh: {
     tagline1: '聆听工作的气息，', tagline2: '记录决策的脉络。',
@@ -159,6 +175,11 @@ const T: Record<Lang, Translations> = {
     toastAdded: '{id} 已添加到 Inbox', toastMoved: '{id} → {status}', toastRde: '{id} 已送往 RDE 审计', toastNeedTitle: '请输入标题',
     btnAiRun: '交给 AI 执行（自动）', toastAiStopped: '{id}：AI 已停止 → {status}（已记录 Handoff）', toastAiDone: '{id}：AI 完成，已记录 Handoff',
     hoAutoDid: 'AI 整理了相关信息并起草了工作方案。', hoAutoUncertain: '部分判断需要人工确认。', hoAutoNext: '由人确认责任边界并审批。',
+    btnEdit: '编辑', btnSave: '保存', btnDelete: '删除',
+    toastEdited: '{id} 已更新', toastDeleted: '{id} 已删除', toastExported: '导出完成',
+    newCtxModalTitle: '新建 Context Card', fCtxTitle: '标题', fCtxQuestion: '提问（催生此项工作的提问）',
+    ctxTitlePh: '例：与客户的共识形成过程', ctxQuestionPh: '例：为什么这个项目的共识需要这么长时间？', btnAddCtx: '添加 Context Card',
+    goCtxCard: '打开 Context Card →',
   },
 };
 
