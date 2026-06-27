@@ -395,7 +395,7 @@ export default function App() {
             />
           )}
           {screen === 'gate' && (
-            <EscalationGate gateRules={gateRulesData} gateDomain={gateDomain} t={t} onSetGateDomain={setGateDomain} />
+            <EscalationGate gateRules={gateRulesData} gateDomain={gateDomain} t={t} items={enriched} onSetGateDomain={setGateDomain} />
           )}
           {screen === 'rde' && (
             <RdeEvidenceAudit rdeEvidence={rdeEvidenceData} t={t}

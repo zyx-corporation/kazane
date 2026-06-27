@@ -1,4 +1,4 @@
-import type { GateRule } from '../types';
+import type { GateRule, EnrichedWorkItem } from '../types';
 import { GATE_DOMAIN_COLORS } from '../types';
 import type { Translations } from '../i18n';
 
@@ -6,10 +6,13 @@ interface EscalationGateProps {
   gateRules: GateRule[];
   gateDomain: string;
   t: Translations;
+  items: EnrichedWorkItem[];
   onSetGateDomain: (d: string) => void;
 }
 
-export function EscalationGate({ gateRules, gateDomain, t, onSetGateDomain }: EscalationGateProps) {
+export function EscalationGate({ gateRules, gateDomain, t, items, onSetGateDomain }: EscalationGateProps) {
+  const domainCounts: Record<string, number> = {};
+  for (const it of items) { domainCounts[it.domain] = (domainCounts[it.domain] ?? 0) + 1; }
   const chips = [{ key: 'all', label: t.chipAll }, ...gateRules.map(r => ({ key: r.domain, label: r.domain }))];
   const filtered = gateDomain === 'all' ? gateRules : gateRules.filter(r => r.domain === gateDomain);
 
@@ -28,7 +31,13 @@ export function EscalationGate({ gateRules, gateDomain, t, onSetGateDomain }: Es
               background: active ? col : '#1a1d24',
               border: `1px solid ${active ? col : '#262a33'}`,
               padding: '6px 13px', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit',
-            }}>{c.label}</button>
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              {c.label}
+              {c.key !== 'all' && domainCounts[c.key] != null && (
+                <span style={{ fontSize: 10, background: active ? 'rgba(0,0,0,0.25)' : '#232730', color: active ? '#fff' : '#6a7078', borderRadius: 20, padding: '1px 6px', fontFamily: "'JetBrains Mono', monospace" }}>{domainCounts[c.key]}</span>
+              )}
+            </button>
           );
         })}
       </div>

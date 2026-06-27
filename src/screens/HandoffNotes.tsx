@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { HandoffNote } from '../types';
 import { DOMAIN_COLORS, AI_ACTORS } from '../types';
 import type { Translations } from '../i18n';
@@ -12,6 +13,10 @@ interface HandoffNotesProps {
 }
 
 export function HandoffNotes({ handoffs, hoSel, t, onSelectHo, onGoCtx, onGoRde }: HandoffNotesProps) {
+  const [query, setQuery] = useState('');
+  const filtered = query.trim()
+    ? handoffs.filter(h => h.wi.toLowerCase().includes(query.toLowerCase()) || h.assignee.toLowerCase().includes(query.toLowerCase()) || h.domain.toLowerCase().includes(query.toLowerCase()) || h.id.toLowerCase().includes(query.toLowerCase()))
+    : handoffs;
   const sel = handoffs.find(h => h.id === hoSel) ?? handoffs[0];
   const selDc = sel ? (DOMAIN_COLORS[sel.domain] ?? '#6a7078') : '#6a7078';
   const selActorColor = sel && AI_ACTORS.includes(sel.assignee) ? '#3fb6a8' : '#5b8def';
@@ -24,7 +29,13 @@ export function HandoffNotes({ handoffs, hoSel, t, onSelectHo, onGoCtx, onGoRde 
       <div style={s.layout}>
         {/* Left list */}
         <div style={s.list}>
-          {handoffs.map(h => {
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="検索…"
+            style={{ background: '#14161b', border: '1px solid #2d323d', borderRadius: 7, color: '#e6e8ec', fontSize: 11.5, padding: '6px 10px', fontFamily: 'inherit', outline: 'none', marginBottom: 4 }}
+          />
+          {filtered.map(h => {
             const active = h.id === hoSel;
             const dc = DOMAIN_COLORS[h.domain] ?? '#6a7078';
             const isAI = AI_ACTORS.includes(h.assignee);
