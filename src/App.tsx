@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, EnrichedWorkItem } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
 import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData } from './data/seed';
+import { dbListItems, dbUpsertItem, dbDeleteItem } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { WorkItemDrawer } from './components/WorkItemDrawer';
@@ -23,7 +24,18 @@ const SCREEN_LABELS: Record<Screen, string> = {
   rde: 'RDE / Evidence Audit',
 };
 
-function loadFromStorage(): WorkItem[] | null {
+// running in Tauri native app?
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+function loadLangFromStorage(): Lang {
+  try {
+    const l = localStorage.getItem('kazane_lang') as Lang;
+    if (l === 'ja' || l === 'en' || l === 'zh') return l;
+  } catch (_) {}
+  return 'ja';
+}
+
+function loadItemsFromStorage(): WorkItem[] | null {
   try {
     const raw = localStorage.getItem('kazane_items');
     if (raw) {
@@ -34,15 +46,7 @@ function loadFromStorage(): WorkItem[] | null {
   return null;
 }
 
-function loadLangFromStorage(): Lang {
-  try {
-    const l = localStorage.getItem('kazane_lang') as Lang;
-    if (l === 'ja' || l === 'en' || l === 'zh') return l;
-  } catch (_) {}
-  return 'ja';
-}
-
-function persist(items: WorkItem[]) {
+function persistLocal(items: WorkItem[]) {
   try { localStorage.setItem('kazane_items', JSON.stringify(items)); } catch (_) {}
 }
 
@@ -57,7 +61,8 @@ function colStatus(col: BoardCol): string {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard');
-  const [items, setItems] = useState<WorkItem[] | null>(() => loadFromStorage());
+  const [items, setItems] = useState<WorkItem[]>(loadItemsFromStorage() ?? seedItems);
+  const [dbReady, setDbReady] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
   const [tab, setTab] = useState<DrawerTab>('context');
   const [ctxSel, setCtxSel] = useState('CTX-018');
@@ -72,9 +77,37 @@ export default function App() {
   const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const t = getT(lang);
-  const baseItems = items ?? seedItems;
-  const enriched: EnrichedWorkItem[] = baseItems.map(enrichItem);
+  const enriched: EnrichedWorkItem[] = items.map(enrichItem);
   const selItem = enriched.find(i => i.id === selId) ?? null;
+
+  // Load from SQLite on mount (Tauri only); seed DB if empty
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    let cancelled = false;
+    dbListItems().then(rows => {
+      if (cancelled) return;
+      if (rows.length > 0) {
+        setItems(rows);
+      } else {
+        // Seed DB with initial data
+        Promise.all(seedItems.map(si => dbUpsertItem(si))).then(() => {
+          if (!cancelled) setItems(seedItems);
+        });
+      }
+      setDbReady(true);
+    }).catch(() => {
+      if (!cancelled) setDbReady(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist single item to DB (Tauri) or full list to localStorage
+  const persist = useCallback((updated: WorkItem[], changed?: WorkItem) => {
+    persistLocal(updated);
+    if (IS_TAURI && dbReady && changed) {
+      dbUpsertItem(changed).catch(() => {});
+    }
+  }, [dbReady]);
 
   function flash(msg: string) {
     setToast(msg);
@@ -89,30 +122,43 @@ export default function App() {
   function closeDrawer() { setSelId(null); }
 
   function moveItem(id: string, col: BoardCol) {
-    const updated = baseItems.map(i => i.id === id
-      ? { ...i, col, status: colStatus(col), bounced: col === 'human' ? true : i.bounced, nextAction: col === 'done' ? '完了・記録済' : i.nextAction }
-      : i);
-    setItems(updated); persist(updated);
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== id) return i;
+      changed = { ...i, col, status: colStatus(col), bounced: col === 'human' ? true : i.bounced, nextAction: col === 'done' ? '完了・記録済' : i.nextAction };
+      return changed;
+    });
+    setItems(updated);
+    persist(updated, changed);
     flash(t.toastMoved.replace('{id}', id).replace('{status}', colStatus(col)));
   }
 
   function bounce(id: string) { moveItem(id, 'human'); }
 
   function runRde(id: string) {
-    const updated = baseItems.map(i => i.id === id ? {
-      ...i, rde: true,
-      rdeAudit: i.rdeAudit ?? { kept: '仕事の主旨を維持。', transformed: '実施内容を要約・構造化。', unresolved: '監査者の確認待ち項目。' }
-    } : i);
-    setItems(updated); persist(updated);
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== id) return i;
+      changed = { ...i, rde: true, rdeAudit: i.rdeAudit ?? { kept: '仕事の主旨を維持。', transformed: '実施内容を要約・構造化。', unresolved: '監査者の確認待ち項目。' } };
+      return changed;
+    });
+    setItems(updated);
+    persist(updated, changed);
     setScreen('rde'); setSelId(null);
     flash(t.toastRde.replace('{id}', id));
   }
 
   function aiRun(id: string) {
-    const it = baseItems.find(i => i.id === id);
+    const it = items.find(i => i.id === id);
     if (!it) return;
-    const aiUpdated = baseItems.map(i => i.id === id ? { ...i, col: 'ai' as BoardCol, status: colStatus('ai') } : i);
-    setItems(aiUpdated); persist(aiUpdated);
+    let aiChanged: WorkItem | undefined;
+    const aiUpdated = items.map(i => {
+      if (i.id !== id) return i;
+      aiChanged = { ...i, col: 'ai' as BoardCol, status: colStatus('ai') };
+      return aiChanged;
+    });
+    setItems(aiUpdated);
+    persist(aiUpdated, aiChanged);
     flash(t.toastMoved.replace('{id}', id).replace('{status}', colStatus('ai')));
     if (aiTimer.current) clearTimeout(aiTimer.current);
     aiTimer.current = setTimeout(() => {
@@ -120,13 +166,13 @@ export default function App() {
       const targetCol: BoardCol = it.risk === '高' ? 'gate' : highRisk ? 'human' : 'done';
       const autoHo = { ...it.ho, did: t.hoAutoDid, uncertain: t.hoAutoUncertain, next: t.hoAutoNext };
       setItems(prev => {
-        const base = prev ?? seedItems;
-        const updated2 = base.map(i => i.id === id ? {
-          ...i, col: targetCol, status: colStatus(targetCol),
-          bounced: targetCol === 'human', ho: autoHo,
-          nextAction: targetCol === 'done' ? '完了・記録済' : i.nextAction,
-        } : i);
-        persist(updated2);
+        let doneChanged: WorkItem | undefined;
+        const updated2 = prev.map(i => {
+          if (i.id !== id) return i;
+          doneChanged = { ...i, col: targetCol, status: colStatus(targetCol), bounced: targetCol === 'human', ho: autoHo, nextAction: targetCol === 'done' ? '完了・記録済' : i.nextAction };
+          return doneChanged;
+        });
+        persist(updated2, doneChanged);
         return updated2;
       });
       if (targetCol === 'done') flash(t.toastAiDone.replace('{id}', id));
@@ -135,7 +181,7 @@ export default function App() {
   }
 
   function addItem(partial: Partial<WorkItem> & { title: string; domain: string; assignee: string }) {
-    const id = nextId(baseItems);
+    const id = nextId(items);
     const isAI = isAiActor(partial.assignee);
     const it: WorkItem = {
       id, col: 'inbox', status: colStatus('inbox'), risk: '中',
@@ -147,8 +193,9 @@ export default function App() {
       ev: [], gatePerm: '整理・下調べ・草案', gateStops: '外部送信／契約／金銭／専門家判断',
       ...partial,
     };
-    const updated = [it, ...baseItems];
-    setItems(updated); persist(updated);
+    const updated = [it, ...items];
+    setItems(updated);
+    persist(updated, it);
     setModalOpen(false);
     flash(t.toastAdded.replace('{id}', id));
   }
@@ -168,9 +215,16 @@ export default function App() {
     try { localStorage.setItem('kazane_lang', l); } catch (_) {}
   }
 
-  function resetDemo() {
-    try { localStorage.removeItem('kazane_items'); } catch (_) {}
-    setItems(null); setSelId(null); setModalOpen(false);
+  async function resetDemo() {
+    if (IS_TAURI && dbReady) {
+      try {
+        const current = await dbListItems();
+        await Promise.all(current.map(i => dbDeleteItem(i.id)));
+        await Promise.all(seedItems.map(si => dbUpsertItem(si)));
+      } catch (_) {}
+    }
+    try { localStorage.setItem('kazane_items', JSON.stringify(seedItems)); } catch (_) {}
+    setItems(seedItems); setSelId(null); setModalOpen(false);
     flash(t.btnReset);
   }
 
