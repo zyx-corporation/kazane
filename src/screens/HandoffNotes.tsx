@@ -8,11 +8,12 @@ interface HandoffNotesProps {
   hoSel: string;
   t: Translations;
   onSelectHo: (id: string) => void;
+  onProposeCtxUpdate: (hoId: string, ctxId: string, summary: string) => void;
   onGoCtx: () => void;
   onGoRde: () => void;
 }
 
-export function HandoffNotes({ handoffs, hoSel, t, onSelectHo, onGoCtx, onGoRde }: HandoffNotesProps) {
+export function HandoffNotes({ handoffs, hoSel, t, onSelectHo, onProposeCtxUpdate, onGoCtx, onGoRde }: HandoffNotesProps) {
   const [query, setQuery] = useState('');
   const filtered = query.trim()
     ? handoffs.filter(h => h.wi.toLowerCase().includes(query.toLowerCase()) || h.assignee.toLowerCase().includes(query.toLowerCase()) || h.domain.toLowerCase().includes(query.toLowerCase()) || h.id.toLowerCase().includes(query.toLowerCase()))
@@ -20,6 +21,7 @@ export function HandoffNotes({ handoffs, hoSel, t, onSelectHo, onGoCtx, onGoRde 
   const sel = handoffs.find(h => h.id === hoSel) ?? handoffs[0];
   const selDc = sel ? (DOMAIN_COLORS[sel.domain] ?? '#6a7078') : '#6a7078';
   const selActorColor = sel && AI_ACTORS.includes(sel.assignee) ? '#3fb6a8' : '#5b8def';
+  const ctxRef = sel?.updCtx?.match(/(CTX-[A-Z0-9]+)/)?.[1] ?? null;
 
   return (
     <section style={s.page}>
@@ -106,7 +108,13 @@ export function HandoffNotes({ handoffs, hoSel, t, onSelectHo, onGoCtx, onGoRde 
             <div style={{ paddingTop: 14, borderTop: '1px solid #262a33', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button style={s.bounceBtn}>{t.btnReturnHuman}</button>
               <button style={s.reassignBtn}>{t.btnReassign}</button>
-              <button onClick={onGoCtx} style={s.secondaryBtn}>{t.btnUpdCtx}</button>
+              {ctxRef ? (
+                <button onClick={() => onProposeCtxUpdate(sel.id, ctxRef, sel.did)} style={s.ctxUpdateBtn}>
+                  {ctxRef} {t.btnProposeCtxUpdate}
+                </button>
+              ) : (
+                <button onClick={onGoCtx} style={s.secondaryBtn}>{t.btnUpdCtx}</button>
+              )}
               <button onClick={onGoRde} style={s.rdeBtn}>{t.sendToRde}</button>
             </div>
           </div>
@@ -141,5 +149,6 @@ const s: Record<string, React.CSSProperties> = {
   bounceBtn: { border: '1px solid #3a2329', background: '#1f1417', color: '#e7bccb', padding: '7px 12px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
   reassignBtn: { border: '1px solid #25382b', background: '#161d18', color: '#9fd9c0', padding: '7px 12px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
   secondaryBtn: { border: '1px solid #2d323d', background: '#1b1e25', color: '#c8cdd5', padding: '7px 12px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
+  ctxUpdateBtn: { border: '1px solid #25382b', background: '#161d18', color: '#9fd9c0', padding: '7px 12px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
   rdeBtn: { border: '1px solid #322c47', background: '#1d1a29', color: '#b6a6ee', padding: '7px 12px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
 };

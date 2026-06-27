@@ -395,6 +395,23 @@ export default function App() {
     setSelId(null);
   }
 
+  function proposeCtxUpdate(hoId: string, ctxId: string, summary: string) {
+    let changed: ContextCard | undefined;
+    const ts = new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+    const updated = contexts.map(c => {
+      if (c.id !== ctxId) return c;
+      const entry = `${ts} [${hoId}]: ${summary.slice(0, 100)}`;
+      changed = { ...c, past: c.past ? `${entry}\n${c.past}` : entry };
+      return changed;
+    });
+    if (!changed) { flash(`${ctxId} が見つかりません`); return; }
+    setContexts(updated);
+    if (IS_TAURI && dbReady) dbUpsertContextCard(changed).catch(() => {});
+    flash(t.toastCtxUpdated.replace('{ctxId}', ctxId));
+    setCtxSel(ctxId);
+    setScreen('context');
+  }
+
   function exportItems() {
     const ts = new Date().toISOString().slice(0, 10);
     downloadJson({ exportedAt: new Date().toISOString(), workItems: items, contextCards: contexts }, `kazane-export-${ts}.json`);
@@ -489,6 +506,7 @@ export default function App() {
           {screen === 'handoff' && (
             <HandoffNotes handoffs={handoffs} hoSel={hoSel} t={t}
               onSelectHo={setHoSel}
+              onProposeCtxUpdate={proposeCtxUpdate}
               onGoCtx={() => nav('context')}
               onGoRde={() => nav('rde')}
             />

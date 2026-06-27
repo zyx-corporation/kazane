@@ -57,6 +57,8 @@ export interface Translations {
   // v0.3 additions
   tabTimeline: string;
   timelineEmpty: string;
+  btnProposeCtxUpdate: string;
+  toastCtxUpdated: string;
 }
 
 const T: Record<Lang, Translations> = {
@@ -112,6 +114,8 @@ const T: Record<Lang, Translations> = {
     agentQueueEmpty: '割り当て待ちのタスクはありません',
     tabTimeline: '履歴',
     timelineEmpty: 'このWork Itemの履歴はまだ記録されていません。',
+    btnProposeCtxUpdate: 'を更新（このHOから）',
+    toastCtxUpdated: '{ctxId} を Handoff Note から更新しました',
   },
   en: {
     tagline1: 'Hear the signals of work,', tagline2: 'chronicle the lineage of decisions.',
@@ -165,6 +169,8 @@ const T: Record<Lang, Translations> = {
     agentQueueEmpty: 'No tasks pending for agent',
     tabTimeline: 'Timeline',
     timelineEmpty: 'No history recorded for this Work Item yet.',
+    btnProposeCtxUpdate: '→ update from this HO',
+    toastCtxUpdated: '{ctxId} updated from Handoff Note',
   },
   zh: {
     tagline1: '聆听工作的气息，', tagline2: '记录决策的脉络。',
@@ -218,6 +224,8 @@ const T: Record<Lang, Translations> = {
     agentQueueEmpty: '没有待处理的 Agent 任务',
     tabTimeline: '历史',
     timelineEmpty: '此 Work Item 暂无历史记录。',
+    btnProposeCtxUpdate: '→ 从此 HO 更新',
+    toastCtxUpdated: '{ctxId} 已从 Handoff Note 更新',
   },
 };
 
