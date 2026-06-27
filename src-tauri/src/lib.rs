@@ -107,6 +107,32 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "create_handoff_notes",
+            sql: "
+                CREATE TABLE IF NOT EXISTS handoff_notes (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    wi TEXT NOT NULL DEFAULT '',
+                    assignee TEXT NOT NULL DEFAULT '',
+                    domain TEXT NOT NULL DEFAULT '',
+                    did TEXT NOT NULL DEFAULT '',
+                    judged TEXT NOT NULL DEFAULT '',
+                    couldnt TEXT NOT NULL DEFAULT '',
+                    uncertain TEXT NOT NULL DEFAULT '',
+                    bounce TEXT NOT NULL DEFAULT '',
+                    next TEXT NOT NULL DEFAULT '',
+                    upd_ctx TEXT NOT NULL DEFAULT '',
+                    ev_json TEXT NOT NULL DEFAULT '[]',
+                    gate TEXT NOT NULL DEFAULT '',
+                    ask TEXT NOT NULL DEFAULT '',
+                    escalated INTEGER DEFAULT 0,
+                    escalation_reason TEXT DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

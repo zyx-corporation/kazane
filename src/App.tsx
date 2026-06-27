@@ -4,7 +4,7 @@ import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, Enriched
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
 import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData } from './data/seed';
-import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard } from './db';
+import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { WorkItemDrawer } from './components/WorkItemDrawer';
@@ -123,7 +123,7 @@ export default function App() {
   useEffect(() => {
     if (!IS_TAURI) return;
     let cancelled = false;
-    Promise.all([dbListItems(), dbListContextCards()]).then(([rows, ctxRows]) => {
+    Promise.all([dbListItems(), dbListContextCards(), dbListHandoffs()]).then(([rows, ctxRows, hoRows]) => {
       if (cancelled) return;
       if (rows.length > 0) {
         setItems(rows);
@@ -134,6 +134,11 @@ export default function App() {
         setContexts(ctxRows);
       } else {
         Promise.all(seedContexts.map(c => dbUpsertContextCard(c)));
+      }
+      if (hoRows.length > 0) {
+        setHandoffs(hoRows);
+      } else {
+        Promise.all(seedHandoffs.map(ho => dbUpsertHandoff(ho)));
       }
       setDbReady(true);
     }).catch(() => { if (!cancelled) setDbReady(false); });
@@ -228,6 +233,7 @@ export default function App() {
       };
       setHandoffs(prev => [newHo, ...prev]);
       setHoSel(newHo.id);
+      if (IS_TAURI && dbReady) dbUpsertHandoff(newHo).catch(() => {});
       if (targetCol === 'done') flash(t.toastAiDone.replace('{id}', id));
       else flash(t.toastAiStopped.replace('{id}', id).replace('{status}', colStatus(targetCol)));
     }, 1400);
@@ -272,6 +278,7 @@ export default function App() {
   const importAgentHandoff = useCallback((ho: HandoffNote) => {
     setHandoffs(prev => [ho, ...prev]);
     setHoSel(ho.id);
+    if (IS_TAURI && dbReady) dbUpsertHandoff(ho).catch(() => {});
     const wiId = ho.wi.split(' ')[0];
     const escalated = ho.escalated ?? false;
     const targetCol: BoardCol = escalated ? 'gate' : 'done';
@@ -377,10 +384,16 @@ export default function App() {
   async function resetDemo() {
     if (IS_TAURI && dbReady) {
       try {
-        const current = await dbListItems();
-        await Promise.all(current.map(i => dbDeleteItem(i.id)));
-        await Promise.all(seedItems.map(si => dbUpsertItem(si)));
-        await Promise.all(seedContexts.map(c => dbUpsertContextCard(c)));
+        const [current, currentCtx] = await Promise.all([dbListItems(), dbListContextCards()]);
+        await Promise.all([
+          ...current.map(i => dbDeleteItem(i.id)),
+          ...currentCtx.map(() => Promise.resolve()),
+        ]);
+        await Promise.all([
+          ...seedItems.map(si => dbUpsertItem(si)),
+          ...seedContexts.map(c => dbUpsertContextCard(c)),
+          ...seedHandoffs.map(ho => dbUpsertHandoff(ho)),
+        ]);
       } catch (_) {}
     }
     try { localStorage.setItem('kazane_items', JSON.stringify(seedItems)); } catch (_) {}

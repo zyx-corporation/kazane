@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard } from '../types';
+import type { WorkItem, ContextCard, HandoffNote } from '../types';
 
 let _db: Database | null = null;
 
@@ -81,6 +81,34 @@ export async function dbUpsertContextCard(card: ContextCard): Promise<void> {
   );
 }
 
+// ---------- HandoffNote ----------
+
+export async function dbListHandoffs(): Promise<HandoffNote[]> {
+  const d = await db();
+  const rows = await d.select<Record<string, unknown>[]>('SELECT * FROM handoff_notes ORDER BY created_at DESC');
+  return rows.map(rowToHandoff);
+}
+
+export async function dbUpsertHandoff(ho: HandoffNote): Promise<void> {
+  const d = await db();
+  await d.execute(
+    `INSERT INTO handoff_notes
+       (id, wi, assignee, domain, did, judged, couldnt, uncertain, bounce, next,
+        upd_ctx, ev_json, gate, ask, escalated, escalation_reason)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+     ON CONFLICT(id) DO UPDATE SET
+       wi=$2, assignee=$3, domain=$4, did=$5, judged=$6, couldnt=$7, uncertain=$8,
+       bounce=$9, next=$10, upd_ctx=$11, ev_json=$12, gate=$13, ask=$14,
+       escalated=$15, escalation_reason=$16`,
+    [
+      ho.id, ho.wi, ho.assignee, ho.domain, ho.did, ho.judged, ho.couldnt,
+      ho.uncertain, ho.bounce, ho.next, ho.updCtx,
+      JSON.stringify(ho.ev), ho.gate, ho.ask,
+      ho.escalated ? 1 : 0, ho.escalationReason ?? '',
+    ],
+  );
+}
+
 // ---------- helpers ----------
 
 function rowToItem(r: Record<string, unknown>): WorkItem {
@@ -106,6 +134,27 @@ function rowToItem(r: Record<string, unknown>): WorkItem {
     rdeAudit: r.rde_audit_json ? JSON.parse(r.rde_audit_json as string) : undefined,
     agentPickedUpAt: r.agent_picked_up_at as string | undefined || undefined,
     agentEscalated: Boolean(r.agent_escalated),
+    escalationReason: r.escalation_reason as string | undefined || undefined,
+  };
+}
+
+function rowToHandoff(r: Record<string, unknown>): HandoffNote {
+  return {
+    id: r.id as string,
+    wi: r.wi as string,
+    assignee: r.assignee as string,
+    domain: r.domain as string,
+    did: r.did as string,
+    judged: r.judged as string,
+    couldnt: r.couldnt as string,
+    uncertain: r.uncertain as string,
+    bounce: r.bounce as string,
+    next: r.next as string,
+    updCtx: r.upd_ctx as string,
+    ev: JSON.parse(r.ev_json as string),
+    gate: r.gate as string,
+    ask: r.ask as string,
+    escalated: Boolean(r.escalated),
     escalationReason: r.escalation_reason as string | undefined || undefined,
   };
 }
