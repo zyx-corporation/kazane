@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard, HandoffNote } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, WorkEvent } from '../types';
 
 let _db: Database | null = null;
 
@@ -107,6 +107,35 @@ export async function dbUpsertHandoff(ho: HandoffNote): Promise<void> {
       ho.escalated ? 1 : 0, ho.escalationReason ?? '',
     ],
   );
+}
+
+// ---------- Events ----------
+
+export async function dbAddEvent(ev: WorkEvent): Promise<void> {
+  const d = await db();
+  await d.execute(
+    `INSERT OR IGNORE INTO events (id, wi_id, event_type, from_col, to_col, actor, note, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [ev.id, ev.wiId, ev.eventType, ev.fromCol ?? '', ev.toCol ?? '', ev.actor, ev.note ?? '', ev.createdAt],
+  );
+}
+
+export async function dbListEvents(wiId: string): Promise<WorkEvent[]> {
+  const d = await db();
+  const rows = await d.select<Record<string, unknown>[]>(
+    'SELECT * FROM events WHERE wi_id=$1 ORDER BY created_at ASC',
+    [wiId],
+  );
+  return rows.map(r => ({
+    id: r.id as string,
+    wiId: r.wi_id as string,
+    eventType: r.event_type as WorkEvent['eventType'],
+    fromCol: r.from_col as string | undefined || undefined,
+    toCol: r.to_col as string | undefined || undefined,
+    actor: r.actor as string,
+    note: r.note as string | undefined || undefined,
+    createdAt: r.created_at as string,
+  }));
 }
 
 // ---------- helpers ----------

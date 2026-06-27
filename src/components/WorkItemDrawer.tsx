@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { EnrichedWorkItem, DrawerTab, BoardCol, WorkItem } from '../types';
+import { useState, useEffect } from 'react';
+import type { EnrichedWorkItem, DrawerTab, BoardCol, WorkItem, WorkEvent } from '../types';
 import { trustColor, isAiActor, DOMAIN_COLORS, AI_ACTORS } from '../types';
 import type { Translations } from '../i18n';
 
@@ -17,7 +17,21 @@ const TABS: { key: DrawerTab; tKey: keyof Translations }[] = [
   { key: 'evidence', tKey: 'tabEvidence' },
   { key: 'rde', tKey: 'tabRde' },
   { key: 'gate', tKey: 'tabGate' },
+  { key: 'timeline', tKey: 'tabTimeline' },
 ];
+
+const EVENT_ICONS: Record<string, string> = {
+  created: '✦', moved: '→', edited: '✏', ai_run: '▶', ai_done: '✓',
+  ai_stopped: '⏸', agent_assigned: '⇒', agent_handoff: '✓', agent_escalated: '⚑',
+  rde_run: '◉', bounced: '↩', deleted: '✕',
+};
+
+const EVENT_COLORS: Record<string, string> = {
+  created: '#5b8def', moved: '#9aa1ad', edited: '#d9a93f', ai_run: '#5fb89f',
+  ai_done: '#5fb89f', ai_stopped: '#d9a93f', agent_assigned: '#3fb6a8',
+  agent_handoff: '#3fb6a8', agent_escalated: '#d96b6b', rde_run: '#9b8cf0',
+  bounced: '#d98ba0', deleted: '#d96b6b',
+};
 
 const DOMAINS = Object.keys(DOMAIN_COLORS);
 
@@ -34,6 +48,7 @@ interface WorkItemDrawerProps {
   onAssignToAgent: (id: string) => void;
   onEditItem: (id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string }) => void;
   onDeleteItem: (id: string) => void;
+  onLoadEvents: (wiId: string) => Promise<WorkEvent[]>;
   onGoCtx: () => void;
   onGoCtxById: (id: string) => void;
   onGoHand: () => void;
@@ -41,9 +56,16 @@ interface WorkItemDrawerProps {
   onGoGate: () => void;
 }
 
-export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
+  const [events, setEvents] = useState<WorkEvent[]>([]);
+
+  useEffect(() => {
+    if (tab === 'timeline') {
+      onLoadEvents(item.id).then(setEvents).catch(() => setEvents([]));
+    }
+  }, [tab, item.id]);
 
   const canAiRun = isAiActor(item.assignee) && (item.col === 'inbox' || item.col === 'ai');
   const canAssignAgent = isAiActor(item.assignee) && item.col === 'inbox';
@@ -206,6 +228,42 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
                 <div style={{ textAlign: 'center', padding: '30px 10px', color: '#6a7078' }}>
                   <div style={{ fontSize: 12.5, marginBottom: 14 }}>{t.noRdeMsg}</div>
                   <button onClick={onGoRde} style={{ border: '1px solid #322c47', background: '#1d1a29', color: '#b6a6ee', padding: '8px 14px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{t.sendToRde}</button>
+                </div>
+              )}
+            </div>
+          )}
+          {tab === 'timeline' && (
+            <div style={s.stack}>
+              {events.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#4a5268', textAlign: 'center', padding: '20px 0' }}>
+                  {t.timelineEmpty}
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: 10, top: 0, bottom: 0, width: 1, background: '#262a33' }} />
+                  {events.map(ev => {
+                    const color = EVENT_COLORS[ev.eventType] ?? '#6a7078';
+                    const icon = EVENT_ICONS[ev.eventType] ?? '·';
+                    const ts = new Date(ev.createdAt).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <div key={ev.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingLeft: 4, marginBottom: 14 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: '50%', background: color, flexShrink: 0, marginTop: 2, fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0e1014', fontWeight: 700, zIndex: 1 }}>
+                          {icon}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, color, fontFamily: "'JetBrains Mono', monospace" }}>{ev.eventType}</span>
+                            {ev.fromCol && ev.toCol && (
+                              <span style={{ fontSize: 10, color: '#6a7078' }}>{ev.fromCol} → {ev.toCol}</span>
+                            )}
+                          </div>
+                          {ev.actor && <div style={{ fontSize: 10, color: '#6a7078', marginTop: 1 }}>{ev.actor}</div>}
+                          {ev.note && <div style={{ fontSize: 11, color: '#9aa1ad', marginTop: 2, wordBreak: 'break-word' }}>{ev.note}</div>}
+                          <div style={{ fontSize: 9.5, color: '#4a5268', fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>{ts}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

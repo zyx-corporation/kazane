@@ -54,6 +54,9 @@ export interface Translations {
   agentPickedUpLabel: string;
   agentEscalatedLabel: string;
   agentQueueEmpty: string;
+  // v0.3 additions
+  tabTimeline: string;
+  timelineEmpty: string;
 }
 
 const T: Record<Lang, Translations> = {
@@ -107,6 +110,8 @@ const T: Record<Lang, Translations> = {
     agentPickedUpLabel: 'エージェント着手',
     agentEscalatedLabel: 'エスカレーション',
     agentQueueEmpty: '割り当て待ちのタスクはありません',
+    tabTimeline: '履歴',
+    timelineEmpty: 'このWork Itemの履歴はまだ記録されていません。',
   },
   en: {
     tagline1: 'Hear the signals of work,', tagline2: 'chronicle the lineage of decisions.',
@@ -158,6 +163,8 @@ const T: Record<Lang, Translations> = {
     agentPickedUpLabel: 'Agent picked up',
     agentEscalatedLabel: 'Escalated',
     agentQueueEmpty: 'No tasks pending for agent',
+    tabTimeline: 'Timeline',
+    timelineEmpty: 'No history recorded for this Work Item yet.',
   },
   zh: {
     tagline1: '聆听工作的气息，', tagline2: '记录决策的脉络。',
@@ -209,6 +216,8 @@ const T: Record<Lang, Translations> = {
     agentPickedUpLabel: 'Agent 已接手',
     agentEscalatedLabel: '已上报',
     agentQueueEmpty: '没有待处理的 Agent 任务',
+    tabTimeline: '历史',
+    timelineEmpty: '此 Work Item 暂无历史记录。',
   },
 };
 

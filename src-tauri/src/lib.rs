@@ -133,6 +133,24 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "create_events",
+            sql: "
+                CREATE TABLE IF NOT EXISTS events (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    wi_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    from_col TEXT NOT NULL DEFAULT '',
+                    to_col TEXT NOT NULL DEFAULT '',
+                    actor TEXT NOT NULL DEFAULT '',
+                    note TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_events_wi_id ON events(wi_id, created_at);
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

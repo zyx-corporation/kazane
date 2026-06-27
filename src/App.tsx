@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote } from './types';
+import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
 import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData } from './data/seed';
-import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff } from './db';
+import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { WorkItemDrawer } from './components/WorkItemDrawer';
@@ -49,6 +49,10 @@ function loadItemsFromStorage(): WorkItem[] | null {
 
 function persistLocal(items: WorkItem[]) {
   try { localStorage.setItem('kazane_items', JSON.stringify(items)); } catch (_) {}
+}
+
+function makeEventId(): string {
+  return 'EV-' + Date.now().toString(36).toUpperCase();
 }
 
 function nextId(items: WorkItem[]): string {
@@ -150,6 +154,20 @@ export default function App() {
     if (IS_TAURI && dbReady && changed) dbUpsertItem(changed).catch(() => {});
   }, [dbReady]);
 
+  const logEv = useCallback((wiId: string, eventType: EventType, opts?: { fromCol?: string; toCol?: string; actor?: string; note?: string }) => {
+    if (!IS_TAURI || !dbReady) return;
+    dbAddEvent({
+      id: makeEventId(),
+      wiId,
+      eventType,
+      fromCol: opts?.fromCol,
+      toCol: opts?.toCol,
+      actor: opts?.actor ?? 'system',
+      note: opts?.note,
+      createdAt: new Date().toISOString(),
+    }).catch(() => {});
+  }, [dbReady]);
+
   function flash(msg: string) {
     setToast(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -163,6 +181,7 @@ export default function App() {
   function closeDrawer() { setSelId(null); }
 
   function moveItem(id: string, col: BoardCol) {
+    const prev = items.find(i => i.id === id);
     let changed: WorkItem | undefined;
     const updated = items.map(i => {
       if (i.id !== id) return i;
@@ -170,6 +189,7 @@ export default function App() {
       return changed;
     });
     setItems(updated); persist(updated, changed);
+    logEv(id, 'moved', { fromCol: prev?.col, toCol: col, actor: 'human', note: colStatus(col) });
     flash(t.toastMoved.replace('{id}', id).replace('{status}', colStatus(col)));
   }
 
@@ -247,6 +267,7 @@ export default function App() {
       return changed;
     });
     setItems(updated); persist(updated, changed);
+    logEv(id, 'edited', { actor: 'human', note: patch.title });
     flash(t.toastEdited.replace('{id}', id));
   }
 
@@ -272,6 +293,7 @@ export default function App() {
     if (IS_TAURI) {
       invoke('write_agent_task', { id, payload: JSON.stringify({ ...it, agentPickedUpAt: now }) }).catch(() => {});
     }
+    logEv(id, 'agent_assigned', { fromCol: it.col, toCol: 'ai', actor: it.assignee });
     flash(t.toastAgentAssigned.replace('{id}', id));
   }
 
@@ -300,9 +322,11 @@ export default function App() {
       if (IS_TAURI && dbReady && changed) dbUpsertItem(changed).catch(() => {});
       return updated;
     });
+    const evType = escalated ? 'agent_escalated' : 'agent_handoff';
+    logEv(wiId, evType as EventType, { toCol: targetCol, actor: ho.assignee, note: ho.did.slice(0, 80) });
     if (escalated) flash(t.toastAgentEscalated.replace('{id}', wiId));
     else flash(t.toastAgentHandoffReceived.replace('{id}', wiId));
-  }, [dbReady, t]);
+  }, [dbReady, logEv, t]);
 
   // Poll for agent handoffs every 10s (Tauri only)
   useEffect(() => {
@@ -334,6 +358,7 @@ export default function App() {
     };
     const updated = [it, ...items];
     setItems(updated); persist(updated, it);
+    logEv(id, 'created', { toCol: it.col, actor: it.assignee, note: it.title });
     setWiModalOpen(false);
     flash(t.toastAdded.replace('{id}', id));
   }
@@ -494,6 +519,7 @@ export default function App() {
           onAssignToAgent={assignToAgent}
           onEditItem={editItem}
           onDeleteItem={deleteItem}
+          onLoadEvents={id => IS_TAURI && dbReady ? dbListEvents(id) : Promise.resolve([])}
           onGoCtx={() => { nav('context'); }}
           onGoCtxById={goCtxById}
           onGoHand={() => { nav('handoff'); }}

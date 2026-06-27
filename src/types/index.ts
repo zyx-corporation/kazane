@@ -1,7 +1,7 @@
 export type Screen = 'dashboard' | 'board' | 'context' | 'handoff' | 'gate' | 'rde';
 export type BoardCol = 'inbox' | 'ai' | 'human' | 'gate' | 'done';
 export type Lang = 'ja' | 'en' | 'zh';
-export type DrawerTab = 'context' | 'handoff' | 'evidence' | 'rde' | 'gate';
+export type DrawerTab = 'context' | 'handoff' | 'evidence' | 'rde' | 'gate' | 'timeline';
 export type Risk = '高' | '中' | '低';
 export type TrustLevel = '高' | '中' | '低';
 
@@ -105,6 +105,19 @@ export interface HandoffNote {
   // v0.2: agent-submitted fields
   escalated?: boolean;
   escalationReason?: string;
+}
+
+export type EventType = 'created' | 'moved' | 'edited' | 'ai_run' | 'ai_done' | 'ai_stopped' | 'agent_assigned' | 'agent_handoff' | 'agent_escalated' | 'rde_run' | 'bounced' | 'deleted';
+
+export interface WorkEvent {
+  id: string;
+  wiId: string;
+  eventType: EventType;
+  fromCol?: string;
+  toCol?: string;
+  actor: string;
+  note?: string;
+  createdAt: string;
 }
 
 export interface GateRule {
