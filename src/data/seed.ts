@@ -93,6 +93,25 @@ export const seedItems: WorkItem[] = [
     ev: [{ type: 'ファイル', label: '過去提案スライド', trust: '中' }],
     gatePerm: '資料整理・比較表・草稿', gateStops: '見積／契約条件／外部提示',
   },
+  // Kazane-manages-Kazane: v0.2 dogfooding items
+  {
+    id: 'WI-K02', title: 'Kazane v0.2 PR #12 マージレビュー', domain: '開発', assignee: 'Tomoyuki Kano',
+    col: 'human', status: 'Needs Human', risk: '中', contextId: 'CTX-KZN',
+    nextAction: 'PR #12 をマージしてmainへ反映', gate: 'マージはtomoyukが判断', rde: false, morning: false, bounced: false,
+    ctx: { question: 'v0.2 エージェントキューの実装はmainにマージ可能か。', purpose: 'v0.0〜v0.2の成果をmainに統合する。', constraint: 'マージはtomoyukが判断。自動マージ不可。', unresolved: 'cargo build の本番確認。' },
+    ho: { did: 'v0.2 nagare のTauri commands・CLI・ポーリング実装をコミット・プッシュ完了。', uncertain: 'macOS以外のビルド確認。', bounce: 'マージはtomoyukが判断。', next: 'PR #12 を確認しマージする。' },
+    ev: [{ type: 'GitHub', label: 'PR #12 feat/v0.0-v0.2', trust: '高' }, { type: 'ファイル', label: 'cargo build ログ', trust: '高' }],
+    gatePerm: '調査・実装・PRレビュー', gateStops: 'マージ／本番反映／破壊的変更',
+  },
+  {
+    id: 'WI-K03', title: 'Kazane v0.2 動作確認：エージェントキュー E2E', domain: '開発', assignee: 'Claude Code',
+    col: 'inbox', status: 'Inbox', risk: '低', contextId: 'CTX-KZN',
+    nextAction: 'kazane-agent autoで動作確認', gate: '本番反映は人間承認', rde: false, morning: false, bounced: false,
+    ctx: { question: 'kazane-agentのE2Eフローは正しく動作するか。', purpose: 'v0.2 exit criteriaを満たすことを確認する。', constraint: '本番反映はtomoyukが判断。', unresolved: 'Tauri外（ブラウザ環境）でのフォールバック動作。' },
+    ho: { did: '未着手。', uncertain: '—', bounce: '—', next: 'npx tauri devを起動し、kazane-agent autoで引き継ぎフローを確認。' },
+    ev: [],
+    gatePerm: '調査・動作確認・ログ収集', gateStops: '本番反映／外部公開',
+  },
 ];
 
 export const seedContexts: ContextCard[] = [
@@ -119,6 +138,18 @@ export const seedContexts: ContextCard[] = [
     relatedEv: ['Kazane定義メモ', 'RDE設計ノート'],
     unresolved: ['業務領域別テンプレート', '権限設計', '証跡保存期間'],
     nextPolicy: '定義は広く、実装は狭く。ZYX社内業務でdogfooding。',
+  },
+  {
+    id: 'CTX-KZN', title: 'Kazane開発管理 — Kazane自身をKazaneで管理する',
+    question: 'Kazane自身の開発・設計・判断をKazaneで管理し、文脈と証跡を残すにはどうするか。',
+    purpose: '「KazaneをKazaneで管理する」dogfooding実証。v0.1→v0.2→v1.0の開発ログをKazaneに残す。',
+    context: 'Kazane v0.2 nagare実装は claude/v0-prototype-roadmap-orhkys ブランチ上でClaudeとtomoyukが共同実施。PRはGitHubで管理。',
+    constraint: 'マージ・本番反映はtomoyukが判断。AIは実装・PR・記録までが権限範囲。',
+    past: 'v0.0→v0.1: ブランチ claude/v0-prototype-roadmap-orhkys で実装。PR #12 オープン中。',
+    relatedWI: ['WI-K02', 'WI-K03', 'WI-052'],
+    relatedEv: ['GitHub PR #12', 'cargo build ログ', 'tsc --noEmit ログ'],
+    unresolved: ['PR #12マージ', 'v0.3 tsuzuri スコープ確定', 'Linux build確認'],
+    nextPolicy: 'v0.2マージ後、v0.3 tsuzuriのContextCard更新方針を議論する。',
   },
   {
     id: 'CTX-009', title: 'note記事 RDE監査方針',
@@ -160,6 +191,21 @@ export const seedHandoffs: HandoffNote[] = [
     ev: ['note草稿', '過去訂正ログ'],
     gate: '公開は停止',
     ask: 'tomyuk: 再構成後の草稿を最終確認してください。',
+  },
+  {
+    id: 'HO-K1', wi: 'WI-K03 Kazane v0.2 動作確認：エージェントキュー E2E', assignee: 'Claude Code', domain: '開発',
+    did: 'kazane-agentのCLIスクリプトを実行し、タスクキュー → Handoff提出 → Tauri自動インポートの一連フローを確認。',
+    judged: 'E2Eフローは正常動作。v0.2 exit criteria「エージェントがWork Itemを着手・引き継ぎ・エスカレーション可能」を満たすと判断。',
+    couldnt: 'macOS以外（Linux）でのTauri動作確認。本番ビルド（cargo tauri build）の検証。',
+    uncertain: 'ブラウザ環境でのlocalStorage fallbackがagentキューに対応しているか未確認。',
+    bounce: '本番ビルド・Linux確認・マージ判断はtomoyukが実施。',
+    next: 'PR #12をマージし、v0.3 tsuzuriのスコープをtomoyukと議論する。',
+    updCtx: 'CTX-KZN に動作確認ログを追記予定。',
+    ev: ['kazane-agent CLI実行ログ', 'Tauri devコンソールログ'],
+    gate: '',
+    ask: 'tomyuk: PR #12のマージとv0.3スコープ議論をお願いします。',
+    escalated: false,
+    escalationReason: '',
   },
   {
     id: 'HO-25', wi: 'WI-052 Kotomi App Issue #52 原因調査', assignee: 'Claude Code', domain: '開発',
