@@ -76,6 +76,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [items, setItems] = useState<WorkItem[]>(loadItemsFromStorage() ?? seedItems);
   const [contexts, setContexts] = useState<ContextCard[]>(seedContexts);
+  const [handoffs, setHandoffs] = useState(seedHandoffs);
   const [dbReady, setDbReady] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
   const [tab, setTab] = useState<DrawerTab>('context');
@@ -184,6 +185,26 @@ export default function App() {
         persist(updated2, doneChanged);
         return updated2;
       });
+      // Auto-generate HandoffNote
+      const hoNum = String(Date.now()).slice(-3);
+      const newHo = {
+        id: `HO-${hoNum}`,
+        wi: `${id} ${it.title}`,
+        assignee: it.assignee,
+        domain: it.domain,
+        did: t.hoAutoDid,
+        judged: targetCol === 'done' ? '責任範囲内で完了と判断。' : '',
+        couldnt: targetCol !== 'done' ? '責任境界を超えるため停止。' : '',
+        uncertain: t.hoAutoUncertain,
+        bounce: targetCol !== 'done' ? colStatus(targetCol) + ' へ移動。' : '',
+        next: t.hoAutoNext,
+        updCtx: it.contextId !== '—' ? it.contextId + ' を更新予定。' : '',
+        ev: it.ev.map(e => e.label),
+        gate: targetCol === 'gate' ? it.gate : '',
+        ask: targetCol !== 'done' ? '人間が判断・承認をお願いします。' : '',
+      };
+      setHandoffs(prev => [newHo, ...prev]);
+      setHoSel(newHo.id);
       if (targetCol === 'done') flash(t.toastAiDone.replace('{id}', id));
       else flash(t.toastAiStopped.replace('{id}', id).replace('{status}', colStatus(targetCol)));
     }, 1400);
@@ -280,7 +301,7 @@ export default function App() {
       } catch (_) {}
     }
     try { localStorage.setItem('kazane_items', JSON.stringify(seedItems)); } catch (_) {}
-    setItems(seedItems); setContexts(seedContexts);
+    setItems(seedItems); setContexts(seedContexts); setHandoffs(seedHandoffs);
     setSelId(null); setWiModalOpen(false); setCtxModalOpen(false);
     flash(t.btnReset);
   }
@@ -345,7 +366,7 @@ export default function App() {
             />
           )}
           {screen === 'handoff' && (
-            <HandoffNotes handoffs={seedHandoffs} hoSel={hoSel} t={t}
+            <HandoffNotes handoffs={handoffs} hoSel={hoSel} t={t}
               onSelectHo={setHoSel}
               onGoCtx={() => nav('context')}
               onGoRde={() => nav('rde')}

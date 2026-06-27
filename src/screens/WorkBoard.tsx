@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { EnrichedWorkItem, BoardCol } from '../types';
 import type { Translations } from '../i18n';
 
@@ -19,6 +19,18 @@ interface WorkBoardProps {
 
 export function WorkBoard({ items, t, onOpenItem, onMoveItem }: WorkBoardProps) {
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return items;
+    const q = query.toLowerCase();
+    return items.filter(i =>
+      i.title.toLowerCase().includes(q) ||
+      i.domain.toLowerCase().includes(q) ||
+      i.assignee.toLowerCase().includes(q) ||
+      i.id.toLowerCase().includes(q)
+    );
+  }, [items, query]);
 
   function handleMenuMove(id: string, col: BoardCol) {
     setMenuId(null);
@@ -30,19 +42,27 @@ export function WorkBoard({ items, t, onOpenItem, onMoveItem }: WorkBoardProps) 
       <div style={{ flexShrink: 0 }}>
         <h1 style={s.h1}>Work Board</h1>
         <p style={s.sub}>{t.subBoard}</p>
-        <div style={s.legend}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 16 }}>
+          <div style={s.legend}>
           <LegendDot dot="#3fb6a8" round label={t.legendAI} />
           <LegendDot dot="#5b8def" round label={t.legendHuman} />
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#7e8590' }}>
             <span style={{ width: 14, height: 9, borderRadius: 3, background: '#241f16', border: '1px solid #3a3220' }} />
             {t.legendGate}
           </span>
+          </div>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="検索…"
+            style={{ background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 7, color: '#e6e8ec', fontSize: 12, padding: '6px 12px', fontFamily: 'inherit', outline: 'none', width: 180 }}
+          />
         </div>
       </div>
 
       <div style={s.board}>
         {COLS.map(col => {
-          const colItems = items.filter(i => i.col === col.key);
+          const colItems = filtered.filter(i => i.col === col.key);
           return (
             <div key={col.key} style={s.col}>
               <div style={s.colHeader}>
@@ -144,7 +164,7 @@ const s: Record<string, React.CSSProperties> = {
   page: { padding: '26px 28px 12px', height: '100%', display: 'flex', flexDirection: 'column' },
   h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#e6e8ec' },
   sub: { margin: '6px 0 0', color: '#8b919c', fontSize: 13 },
-  legend: { display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 },
+  legend: { display: 'flex', alignItems: 'center', gap: 16 },
   board: { flex: 1, marginTop: 18, display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 18, alignItems: 'flex-start' },
   col: { width: 268, flexShrink: 0, display: 'flex', flexDirection: 'column' },
   colHeader: { display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px 10px' },
