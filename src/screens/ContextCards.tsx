@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ContextCard } from '../types';
 import type { Translations } from '../i18n';
 
@@ -13,6 +14,10 @@ interface ContextCardsProps {
 }
 
 export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnresolved, onGoBoard, onGoRde, onAddCtx }: ContextCardsProps) {
+  const [query, setQuery] = useState('');
+  const filtered = query.trim()
+    ? contexts.filter(c => c.title.toLowerCase().includes(query.toLowerCase()) || c.question.toLowerCase().includes(query.toLowerCase()) || c.id.toLowerCase().includes(query.toLowerCase()))
+    : contexts;
   const sel = contexts.find(c => c.id === ctxSel) ?? contexts[0];
 
   return (
@@ -23,7 +28,13 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
       <div style={s.layout}>
         {/* Left list */}
         <div style={s.list}>
-          {contexts.map(c => {
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="検索…"
+            style={{ background: '#14161b', border: '1px solid #2d323d', borderRadius: 7, color: '#e6e8ec', fontSize: 11.5, padding: '6px 10px', fontFamily: 'inherit', outline: 'none', marginBottom: 4 }}
+          />
+          {filtered.map(c => {
             const active = c.id === ctxSel;
             return (
               <button key={c.id} onClick={() => onSelectCtx(c.id)} style={{

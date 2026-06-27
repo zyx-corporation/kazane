@@ -92,6 +92,28 @@ export default function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === 'Escape') {
+        if (selId) { setSelId(null); return; }
+        if (wiModalOpen) { setWiModalOpen(false); return; }
+        if (ctxModalOpen) { setCtxModalOpen(false); return; }
+        if (langOpen) { setLangOpen(false); return; }
+      }
+      if (!isInput && e.key === 'n' && !e.metaKey && !e.ctrlKey) {
+        setWiModalOpen(true);
+        setForm({ title: '', domain: '顧客対応', assignee: 'AI番頭' });
+      }
+      if (!isInput && e.key === 'b' && !e.metaKey && !e.ctrlKey) nav('board');
+      if (!isInput && e.key === 'd' && !e.metaKey && !e.ctrlKey) nav('dashboard');
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selId, wiModalOpen, ctxModalOpen, langOpen]);
+
   const t = getT(lang);
   const enriched: EnrichedWorkItem[] = items.map(enrichItem);
   const selItem = enriched.find(i => i.id === selId) ?? null;
