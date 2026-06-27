@@ -9,6 +9,12 @@ interface FlowDashboardProps {
   onNav: (s: Screen) => void;
 }
 
+function nowLabel(): string {
+  const d = new Date();
+  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-') + ' · ' +
+    d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 export function FlowDashboard({ items, t, onOpenItem, onNav }: FlowDashboardProps) {
   const morningItems = items.filter(i => i.morning);
   const bouncedItems = items.filter(i => i.bounced);
@@ -31,7 +37,7 @@ export function FlowDashboard({ items, t, onOpenItem, onNav }: FlowDashboardProp
           <h1 style={s.h1}>Flow Dashboard</h1>
           <p style={s.sub}>{t.subDash}</p>
         </div>
-        <div style={s.mono}>2026-06-27 · 09:14</div>
+        <div style={s.mono}>{nowLabel()}</div>
       </div>
 
       {/* Summary bar */}

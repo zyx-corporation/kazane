@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { EnrichedWorkItem, DrawerTab, BoardCol } from '../types';
+import type { EnrichedWorkItem, DrawerTab, BoardCol, WorkItem } from '../types';
 import { trustColor, isAiActor, DOMAIN_COLORS, AI_ACTORS } from '../types';
 import type { Translations } from '../i18n';
 
@@ -31,7 +31,7 @@ interface WorkItemDrawerProps {
   onBounce: (id: string) => void;
   onRunRde: (id: string) => void;
   onAiRun: (id: string) => void;
-  onEditItem: (id: string, patch: { title: string; domain: string; assignee: string }) => void;
+  onEditItem: (id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string }) => void;
   onDeleteItem: (id: string) => void;
   onGoCtx: () => void;
   onGoCtxById: (id: string) => void;
@@ -42,7 +42,7 @@ interface WorkItemDrawerProps {
 
 export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onEditItem, onDeleteItem, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee });
+  const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
 
   const canAiRun = isAiActor(item.assignee) && (item.col === 'inbox' || item.col === 'ai');
   const hasRde = !!(item.rde && item.rdeAudit);
@@ -55,7 +55,7 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
   }
 
   function cancelEdit() {
-    setDraft({ title: item.title, domain: item.domain, assignee: item.assignee });
+    setDraft({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
     setEditing(false);
   }
 
@@ -84,7 +84,7 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {!editing && (
-                <button onClick={() => { setDraft({ title: item.title, domain: item.domain, assignee: item.assignee }); setEditing(true); }} style={s.iconBtn} title={t.btnEdit}>✏</button>
+                <button onClick={() => { setDraft({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction }); setEditing(true); }} style={s.iconBtn} title={t.btnEdit}>✏</button>
               )}
               <button onClick={handleDelete} style={{ ...s.iconBtn, color: '#d96b6b' }} title={t.btnDelete}>🗑</button>
               <button onClick={onClose} style={s.closeBtn}>×</button>
@@ -107,7 +107,16 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
                 <select value={draft.assignee} onChange={e => setDraft(d => ({ ...d, assignee: e.target.value }))} style={s.editSelect}>
                   {[...AI_ACTORS, 'Tomoyuki Kano', '山田 太郎', '中山 誠'].map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
+                <select value={draft.risk} onChange={e => setDraft(d => ({ ...d, risk: e.target.value as typeof item.risk }))} style={{ ...s.editSelect, flex: '0 0 72px' }}>
+                  {(['低', '中', '高'] as const).map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
               </div>
+              <input
+                value={draft.nextAction}
+                onChange={e => setDraft(d => ({ ...d, nextAction: e.target.value }))}
+                style={{ ...s.editInput, fontSize: 12 }}
+                placeholder="Next action"
+              />
               <div style={{ display: 'flex', gap: 7 }}>
                 <button onClick={saveEdit} style={s.saveBtn}>{t.btnSave}</button>
                 <button onClick={cancelEdit} style={s.cancelEditBtn}>{t.btnCancel}</button>

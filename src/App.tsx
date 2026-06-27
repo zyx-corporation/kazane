@@ -189,7 +189,7 @@ export default function App() {
     }, 1400);
   }
 
-  function editItem(id: string, patch: { title: string; domain: string; assignee: string }) {
+  function editItem(id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string }) {
     let changed: WorkItem | undefined;
     const updated = items.map(i => {
       if (i.id !== id) return i;
@@ -334,7 +334,7 @@ export default function App() {
         {/* Screen content */}
         <div style={s.content} onClick={() => langOpen && setLangOpen(false)}>
           {screen === 'dashboard' && <FlowDashboard items={enriched} t={t} onOpenItem={openItem} onNav={nav} />}
-          {screen === 'board' && <WorkBoard items={enriched} t={t} onOpenItem={openItem} />}
+          {screen === 'board' && <WorkBoard items={enriched} t={t} onOpenItem={openItem} onMoveItem={moveItem} />}
           {screen === 'context' && (
             <ContextCards contexts={contexts} ctxSel={ctxSel} t={t}
               onSelectCtx={setCtxSel}

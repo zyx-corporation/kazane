@@ -1,4 +1,5 @@
-import type { EnrichedWorkItem } from '../types';
+import { useState } from 'react';
+import type { EnrichedWorkItem, BoardCol } from '../types';
 import type { Translations } from '../i18n';
 
 const COLS = [
@@ -13,11 +14,19 @@ interface WorkBoardProps {
   items: EnrichedWorkItem[];
   t: Translations;
   onOpenItem: (id: string) => void;
+  onMoveItem?: (id: string, col: BoardCol) => void;
 }
 
-export function WorkBoard({ items, t, onOpenItem }: WorkBoardProps) {
+export function WorkBoard({ items, t, onOpenItem, onMoveItem }: WorkBoardProps) {
+  const [menuId, setMenuId] = useState<string | null>(null);
+
+  function handleMenuMove(id: string, col: BoardCol) {
+    setMenuId(null);
+    onMoveItem?.(id, col);
+  }
+
   return (
-    <section style={s.page}>
+    <section style={s.page} onClick={() => setMenuId(null)}>
       <div style={{ flexShrink: 0 }}>
         <h1 style={s.h1}>Work Board</h1>
         <p style={s.sub}>{t.subBoard}</p>
@@ -42,7 +51,17 @@ export function WorkBoard({ items, t, onOpenItem }: WorkBoardProps) {
                 <span style={s.colCount}>{colItems.length}</span>
               </div>
               <div style={{ flex: 1, background: '#15181e', border: '1px solid #232730', borderRadius: 11, padding: 9, display: 'flex', flexDirection: 'column', gap: 9, minHeight: 120 }}>
-                {colItems.map(it => <WorkCard key={it.id} item={it} onOpen={() => onOpenItem(it.id)} />)}
+                {colItems.map(it => (
+                  <WorkCard
+                    key={it.id}
+                    item={it}
+                    menuOpen={menuId === it.id}
+                    onOpen={e => { e.stopPropagation(); onOpenItem(it.id); }}
+                    onMenuToggle={e => { e.stopPropagation(); setMenuId(menuId === it.id ? null : it.id); }}
+                    onMove={(col) => handleMenuMove(it.id, col)}
+                    currentCol={it.col}
+                  />
+                ))}
               </div>
             </div>
           );
@@ -52,28 +71,63 @@ export function WorkBoard({ items, t, onOpenItem }: WorkBoardProps) {
   );
 }
 
-function WorkCard({ item, onOpen }: { item: EnrichedWorkItem; onOpen: () => void }) {
+function WorkCard({ item, menuOpen, onOpen, onMenuToggle, onMove, currentCol }: {
+  item: EnrichedWorkItem;
+  menuOpen: boolean;
+  onOpen: (e: React.MouseEvent) => void;
+  onMenuToggle: (e: React.MouseEvent) => void;
+  onMove: (col: BoardCol) => void;
+  currentCol: BoardCol;
+}) {
   return (
-    <div onClick={onOpen} style={{ ...s.card, borderLeft: `3px solid ${item.dc}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: '#aeb4bf' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.dc }} />{item.domain}
-        </span>
-        <span style={{ fontSize: 9.5, color: item.riskColor, border: `1px solid ${item.riskColor}`, padding: '2px 6px', borderRadius: 5 }}>{item.riskLabel}</span>
+    <div style={{ position: 'relative' }}>
+      <div onClick={onOpen} style={{ ...s.card, borderLeft: `3px solid ${item.dc}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: '#aeb4bf' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.dc }} />{item.domain}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 9.5, color: item.riskColor, border: `1px solid ${item.riskColor}`, padding: '2px 6px', borderRadius: 5 }}>{item.riskLabel}</span>
+            <button
+              onClick={onMenuToggle}
+              title="列を移動"
+              style={{ border: '1px solid #2d323d', background: '#16191f', color: '#6a7078', borderRadius: 4, padding: '1px 5px', fontSize: 10, cursor: 'pointer', lineHeight: 1.4 }}
+            >⇄</button>
+          </div>
+        </div>
+        <div style={s.cardTitle}>{item.title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10.5, color: '#8b919c', fontFamily: "'JetBrains Mono', monospace" }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.actorColor }} />
+          {item.assignee} <span style={{ color: '#4f555f' }}>·</span> {item.contextId}
+        </div>
+        <div style={s.nextAction}>→ {item.nextAction}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={s.gateChip}>⚑ {item.gate}</span>
+          {item.rde && <span style={s.rdeChip}>RDE要</span>}
+        </div>
+        <div style={s.tagRow}>
+          {['文脈', '引継', '証跡', '監査'].map(tg => <span key={tg} style={s.tag}>{tg}</span>)}
+        </div>
       </div>
-      <div style={s.cardTitle}>{item.title}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10.5, color: '#8b919c', fontFamily: "'JetBrains Mono', monospace" }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.actorColor }} />
-        {item.assignee} <span style={{ color: '#4f555f' }}>·</span> {item.contextId}
-      </div>
-      <div style={s.nextAction}>→ {item.nextAction}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <span style={s.gateChip}>⚑ {item.gate}</span>
-        {item.rde && <span style={s.rdeChip}>RDE要</span>}
-      </div>
-      <div style={s.tagRow}>
-        {['文脈', '引継', '証跡', '監査'].map(t => <span key={t} style={s.tag}>{t}</span>)}
-      </div>
+
+      {/* Quick-move popover */}
+      {menuOpen && (
+        <div onClick={e => e.stopPropagation()} style={s.moveMenu}>
+          <div style={{ fontSize: 9.5, color: '#6a7078', marginBottom: 5, fontFamily: "'JetBrains Mono', monospace" }}>移動先</div>
+          {COLS.map(c => (
+            <button
+              key={c.key}
+              onClick={() => onMove(c.key)}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', border: 'none',
+                background: c.key === currentCol ? '#232a39' : 'transparent',
+                color: c.key === currentCol ? c.color : '#9aa1ad',
+                padding: '5px 7px', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >{c.name}</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -103,4 +157,5 @@ const s: Record<string, React.CSSProperties> = {
   rdeChip: { fontSize: 9.5, color: '#b6a6ee', background: '#1d1a29', border: '1px solid #322c47', padding: '3px 7px', borderRadius: 5 },
   tagRow: { display: 'flex', gap: 4, paddingTop: 2, borderTop: '1px solid #23272f' },
   tag: { fontSize: 9, color: '#6a7078', background: '#16191f', padding: '2px 6px', borderRadius: 4 },
+  moveMenu: { position: 'absolute', top: 0, right: -142, zIndex: 40, background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 9, padding: '9px 8px', width: 135, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' },
 };
