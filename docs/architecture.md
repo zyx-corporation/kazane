@@ -4,7 +4,7 @@
 
 Kazane is a human–AI work operating system. It is not limited to development. It manages workflows across business functions wherever AI agents can assist.
 
-This file provides the short conceptual overview. The expanded multi-plane structure is defined in [architecture-v2.md](architecture-v2.md). Security details are defined in [security-architecture.md](security-architecture.md).
+This file provides the short conceptual overview. The expanded multi-plane structure is defined in [architecture-v2.md](architecture-v2.md). Security details are defined in [security-architecture.md](security-architecture.md). Cognitive-context design is defined in [cognitive-context-design.md](cognitive-context-design.md).
 
 ## Initial platform assumptions
 
@@ -34,8 +34,11 @@ Local Orchestrator ───── Privilege Manager
       │                       │
       ▼                       ▼
 Work Board ─ Context ─ Evidence ─ Audit
-      │
-      ▼
+      │             │             │
+      │             ▼             ▼
+      │       Meaning Trace ─ RDE / T-RDE
+      │             │
+      ▼             ▼
 Local / Remote Agent Runtime
       │
       ▼
@@ -58,7 +61,7 @@ Work Items may represent development issues, customer email, sales follow-up, do
 
 Stores shared organizational memory and work context.
 
-Context types include project context, customer context, design strategy, business context, technical context, brand/voice context, operations context, risk/legal context, agent manuals, handoff context, and RDE context.
+Context types include project context, customer context, design strategy, business context, technical context, brand/voice context, operations context, risk/legal context, agent manuals, handoff context, RDE context, meaning trace, decision provenance, value continuity, and unknown-unknown review.
 
 ### Local Orchestrator
 
@@ -72,6 +75,8 @@ Owns typed privileged operations, policy checks, secret access, approval flow, a
 
 Defines AI agents as first-class work actors. An agent includes manual, model policy, desk/context scope, tools, permissions, review chain, escalation rules, and health expectations.
 
+Agent Organization may include an Executive Layer to reduce human decision concentration, but this layer does not replace human responsibility. It should remain auditable through Decision Provenance, RDE/T-RDE, and Meta-Executive review.
+
 ### Handoff System
 
 Records durable handoff notes between agents and humans.
@@ -80,9 +85,15 @@ Records durable handoff notes between agents and humans.
 
 Defines when AI must stop and return work to a human or higher review layer.
 
+Escalation should be driven not only by reversibility, but also by privilege/security impact, meaning-change impact, responsibility impact, and uncertainty class. Gates may evolve through reviewed proposals when Unknown Unknowns are detected.
+
 ### Evidence Log
 
 Links work outputs to sources, documents, issues, emails, files, commands, and decisions.
+
+### Meaning Trace and Decision Provenance
+
+Records why a decision was made, what alternatives were rejected, what changed from the previous context, which values were prioritized, and which Evidence, Context Updates, and T-RDE results are linked.
 
 ### RDE Audit
 
@@ -90,7 +101,7 @@ Inspects semantic change: preserved elements, transformed elements, supplemented
 
 ### Ops Health
 
-Detects operational drift such as Done without Handoff, Handoff without Evidence, stale Work Items, missing Context updates, failed scheduled agent runs, repeated agent failures, permission drift, and broken evidence references.
+Detects operational drift such as Done without Handoff, Handoff without Evidence, stale Work Items, missing Context updates, failed scheduled agent runs, repeated agent failures, permission drift, broken evidence references, and unexplained meaning drift.
 
 ## Data-first principle
 
