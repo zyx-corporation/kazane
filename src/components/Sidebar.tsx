@@ -1,134 +1,91 @@
-import type { Screen } from "../App";
+import type { Screen, Lang } from '../types';
+import type { Translations } from '../i18n';
+
+interface NavItem {
+  key: Screen;
+  label: string;
+  dot: string;
+}
+
+const NAV: NavItem[] = [
+  { key: 'dashboard', label: 'Flow Dashboard', dot: '#5b8def' },
+  { key: 'board', label: 'Work Board', dot: '#3fb6a8' },
+  { key: 'context', label: 'Context Cards', dot: '#9b8cf0' },
+  { key: 'handoff', label: 'Handoff Notes', dot: '#5fb89f' },
+  { key: 'gate', label: 'Escalation Gate', dot: '#d9a93f' },
+  { key: 'rde', label: 'RDE / Evidence Audit', dot: '#b6a6ee' },
+];
 
 interface SidebarProps {
   current: Screen;
-  onNavigate: (screen: Screen) => void;
+  lang: Lang;
+  t: Translations;
+  onNav: (s: Screen) => void;
 }
 
-const navItems: { id: Screen; label: string; ja: string; icon: string }[] = [
-  { id: "flow", label: "Flow Dashboard", ja: "フロー", icon: "◎" },
-  { id: "work", label: "Work Board", ja: "作業ボード", icon: "▤" },
-  { id: "context", label: "Context Cards", ja: "コンテキスト", icon: "⬡" },
-  { id: "agents", label: "Agent Org", ja: "エージェント", icon: "⬡" },
-  { id: "handoff", label: "Handoff & Evidence", ja: "引継ぎ・証拠", icon: "↗" },
-  { id: "health", label: "Ops Health", ja: "運用状態", icon: "♥" },
-];
-
-export function Sidebar({ current, onNavigate }: SidebarProps) {
+export function Sidebar({ current, t, onNav }: SidebarProps) {
   return (
-    <aside style={styles.aside}>
-      <div style={styles.brand}>
-        <span style={styles.brandKanji}>風音</span>
-        <span style={styles.brandLatin}>Kazane</span>
-        <span style={styles.brandSub}>Chronicle Work OS</span>
+    <aside style={s.sidebar}>
+      <div style={s.brand}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+          <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+            <circle cx="15" cy="15" r="3.5" fill="#5b8def" />
+            <circle cx="15" cy="15" r="8" stroke="#5b8def" strokeOpacity="0.55" strokeWidth="1.4" />
+            <circle cx="15" cy="15" r="13" stroke="#5b8def" strokeOpacity="0.25" strokeWidth="1.2" />
+          </svg>
+          <div>
+            <div style={s.brandName}>風音 <span style={s.brandSub}>Kazane</span></div>
+            <div style={s.brandTag}>Chronicle Work OS</div>
+          </div>
+        </div>
+        <div style={s.tagline}>{t.tagline1}<br />{t.tagline2}</div>
       </div>
-      <nav style={styles.nav}>
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            style={{
-              ...styles.navItem,
-              ...(current === item.id ? styles.navItemActive : {}),
-            }}
-            onClick={() => onNavigate(item.id)}
-          >
-            <span style={styles.navIcon}>{item.icon}</span>
-            <span style={styles.navText}>
-              <span style={styles.navLabel}>{item.label}</span>
-              <span style={styles.navJa}>{item.ja}</span>
-            </span>
+
+      <nav style={s.nav}>
+        {NAV.map(n => {
+          const active = current === n.key;
+          return (
+            <button key={n.key} onClick={() => onNav(n.key)} style={{
+              ...s.navBtn,
+              background: active ? '#232a39' : 'transparent',
+              color: active ? '#e6e8ec' : '#9aa1ad',
+            }}>
+              <span style={{ ...s.navBar, background: active ? n.dot : 'transparent' }} />
+              <span style={{ ...s.navDot, background: n.dot, opacity: active ? 1 : 0.5 }} />
+              {n.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div style={s.divider} />
+      <nav style={s.nav}>
+        {['Settings', 'Integrations'].map(label => (
+          <button key={label} style={{ ...s.navBtn, color: '#7e8590', fontSize: 12 }}>
+            <span style={{ ...s.navBar, background: 'transparent' }} />
+            <span style={{ width: 7, height: 7, borderRadius: 2, background: '#3a3f4a', flexShrink: 0 }} />
+            {label}
           </button>
         ))}
       </nav>
-      <div style={styles.version}>v0.0 kiri / 霧</div>
+
+      <div style={{ flex: 1 }} />
+      <div style={s.desc}>{t.sidebarDesc}</div>
     </aside>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  aside: {
-    width: 220,
-    minHeight: "100vh",
-    background: "#0f1117",
-    borderRight: "1px solid #1e2130",
-    display: "flex",
-    flexDirection: "column",
-    padding: "0",
-    flexShrink: 0,
-  },
-  brand: {
-    padding: "24px 20px 20px",
-    borderBottom: "1px solid #1e2130",
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  },
-  brandKanji: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: "#e8e8e8",
-    letterSpacing: 2,
-  },
-  brandLatin: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#7b8aad",
-    letterSpacing: 1,
-  },
-  brandSub: {
-    fontSize: 10,
-    color: "#4a5268",
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  nav: {
-    flex: 1,
-    padding: "12px 0",
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-  },
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "10px 20px",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    textAlign: "left",
-    borderRadius: 0,
-    width: "100%",
-    color: "#6b7a9a",
-    transition: "background 0.1s, color 0.1s",
-  },
-  navItemActive: {
-    background: "#1a1f2e",
-    color: "#c8d0e8",
-    borderLeft: "2px solid #4f7ef8",
-  },
-  navIcon: {
-    fontSize: 14,
-    width: 18,
-    textAlign: "center",
-  },
-  navText: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-  },
-  navLabel: {
-    fontSize: 12,
-    fontWeight: 500,
-  },
-  navJa: {
-    fontSize: 10,
-    color: "#3d4560",
-  },
-  version: {
-    padding: "12px 20px",
-    fontSize: 10,
-    color: "#2e3450",
-    borderTop: "1px solid #1a1f2e",
-  },
+const s: Record<string, React.CSSProperties> = {
+  sidebar: { width: 250, flexShrink: 0, background: '#16191f', borderRight: '1px solid #262a33', display: 'flex', flexDirection: 'column', height: '100vh' },
+  brand: { padding: '20px 18px 16px' },
+  brandName: { fontSize: 16, fontWeight: 700, letterSpacing: '0.04em', lineHeight: 1.1, color: '#e6e8ec' },
+  brandSub: { fontSize: 12, color: '#9aa1ad', fontWeight: 500 },
+  brandTag: { fontSize: 10, color: '#6a7078', letterSpacing: '0.14em', fontFamily: "'JetBrains Mono', monospace", textTransform: 'uppercase', marginTop: 2 },
+  tagline: { marginTop: 13, fontSize: 11, color: '#7e8590', lineHeight: 1.6 },
+  nav: { display: 'flex', flexDirection: 'column', gap: 3, padding: '6px 12px' },
+  navBtn: { display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left', border: 'none', padding: '9px 12px 9px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', position: 'relative', transition: 'background 0.15s' },
+  navBar: { position: 'absolute', left: 0, width: 3, height: 16, borderRadius: 2 },
+  navDot: { width: 7, height: 7, borderRadius: 2, flexShrink: 0 },
+  divider: { margin: '8px 12px', height: 1, background: '#262a33' },
+  desc: { margin: '14px 14px 16px', padding: 12, background: '#13161c', border: '1px solid #232730', borderRadius: 9, fontSize: 10.5, color: '#7e8590', lineHeight: 1.65 },
 };

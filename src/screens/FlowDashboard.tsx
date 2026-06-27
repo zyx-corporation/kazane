@@ -1,118 +1,159 @@
-import { mockWorkItems, mockAgentProfiles, mockAlerts } from "../types/mock-data";
-import type { WorkItemStatus } from "../types";
+import type { EnrichedWorkItem, Screen } from '../types';
+import type { Translations } from '../i18n';
+import { DOMAIN_COLORS } from '../types';
 
-const statusColor: Record<WorkItemStatus, string> = {
-  open: "#4a90d9",
-  in_progress: "#f5a623",
-  needs_human: "#e05252",
-  done: "#5cb85c",
-  cancelled: "#6b7a9a",
-};
+interface FlowDashboardProps {
+  items: EnrichedWorkItem[];
+  t: Translations;
+  onOpenItem: (id: string) => void;
+  onNav: (s: Screen) => void;
+}
 
-const statusLabel: Record<WorkItemStatus, string> = {
-  open: "Open",
-  in_progress: "In Progress",
-  needs_human: "Needs Human",
-  done: "Done",
-  cancelled: "Cancelled",
-};
+export function FlowDashboard({ items, t, onOpenItem, onNav }: FlowDashboardProps) {
+  const morningItems = items.filter(i => i.morning);
+  const bouncedItems = items.filter(i => i.bounced);
+  const queueItems = items.filter(i => i.col === 'human' || i.col === 'gate');
+  const domainCounts = Object.entries(DOMAIN_COLORS).map(([name, dc]) => ({
+    name, dc, count: items.filter(i => i.domain === name).length,
+  }));
 
-export function FlowDashboard() {
-  const active = mockAgentProfiles.filter((a) => a.status === "active");
-  const needsHuman = mockWorkItems.filter((w) => w.status === "needs_human");
-  const inProgress = mockWorkItems.filter((w) => w.status === "in_progress");
-  const done = mockWorkItems.filter((w) => w.status === "done");
+  const sumCards = [
+    { label: t.cInProgress, value: items.filter(i => i.col === 'ai' || i.col === 'inbox').length, sub: t.sInProgress, color: '#5b8def', onClick: () => onNav('board') },
+    { label: t.cHuman, value: items.filter(i => i.col === 'human').length, sub: t.sHuman, color: '#d9a93f', onClick: () => onNav('board') },
+    { label: t.cRde, value: items.filter(i => i.rde).length, sub: t.sRde, color: '#b6a6ee', onClick: () => onNav('rde') },
+    { label: t.cGate, value: items.filter(i => i.col === 'gate').length, sub: t.sGate, color: '#a07fe0', onClick: () => onNav('gate') },
+  ];
 
   return (
-    <div style={styles.page}>
-      <h1 style={styles.heading}>Flow Dashboard <span style={styles.headingJa}>フロー</span></h1>
-      <p style={styles.sub}>Current state of work, AI activity, and human decisions.</p>
-
-      <div style={styles.statsRow}>
-        <StatCard label="In Progress" value={inProgress.length} color="#f5a623" />
-        <StatCard label="Needs Human" value={needsHuman.length} color="#e05252" />
-        <StatCard label="Done" value={done.length} color="#5cb85c" />
-        <StatCard label="Active Agents" value={active.length} color="#4f7ef8" />
-        <StatCard label="Alerts" value={mockAlerts.length} color={mockAlerts.length > 0 ? "#e05252" : "#5cb85c"} />
+    <section style={s.page}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={s.h1}>Flow Dashboard</h1>
+          <p style={s.sub}>{t.subDash}</p>
+        </div>
+        <div style={s.mono}>2026-06-27 · 09:14</div>
       </div>
 
-      <div style={styles.sections}>
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>Active Work</h2>
-          {inProgress.map((wi) => (
-            <div key={wi.id} style={styles.workRow}>
-              <span style={{ ...styles.badge, background: statusColor[wi.status] }}>
-                {statusLabel[wi.status]}
-              </span>
-              <span style={styles.workTitle}>{wi.title}</span>
-              <span style={styles.actorTag}>{wi.actor_name}</span>
-            </div>
-          ))}
-          {inProgress.length === 0 && <p style={styles.empty}>No active work.</p>}
-        </section>
-
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>Active Agents</h2>
-          {active.map((a) => (
-            <div key={a.id} style={styles.agentRow}>
-              <span style={styles.agentDot} />
-              <span style={styles.agentName}>{a.name}</span>
-              <span style={styles.agentRole}>{a.role}</span>
-              {a.current_work_item_id && (
-                <span style={styles.agentWork}>→ {a.current_work_item_id}</span>
-              )}
-            </div>
-          ))}
-        </section>
-
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>Alerts</h2>
-          {mockAlerts.map((alert) => (
-            <div key={alert.id} style={{ ...styles.alertRow, borderLeft: `3px solid ${alert.severity === "critical" ? "#e05252" : alert.severity === "warning" ? "#f5a623" : "#4a90d9"}` }}>
-              <span style={styles.alertMsg}>{alert.message}</span>
-            </div>
-          ))}
-          {mockAlerts.length === 0 && <p style={styles.empty}>No alerts.</p>}
-        </section>
+      {/* Summary bar */}
+      <div style={s.summaryBar}>
+        <span style={s.greenDot} />
+        <span style={{ fontSize: 13, color: '#c8d0cb' }}>{t.dashSummary}</span>
       </div>
+
+      {/* Stat cards */}
+      <div style={s.statGrid}>
+        {sumCards.map((c, i) => (
+          <button key={i} onClick={c.onClick} style={s.statCard}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: '#9aa1ad' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: c.color }} />{c.label}
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 700, color: c.color, lineHeight: 1, fontFamily: "'JetBrains Mono', monospace" }}>{c.value}</div>
+            <div style={{ fontSize: 10.5, color: '#6a7078' }}>{c.sub}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Main panels */}
+      <div style={s.panels}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* Morning items */}
+          <div>
+            <SectionHead dot="#5b8def" title={t.hdMorning} />
+            <div style={s.stack}>
+              {morningItems.map(it => (
+                <div key={it.id} onClick={() => onOpenItem(it.id)} style={s.itemRow}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.dc, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, color: '#e0e3e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                    <div style={{ fontSize: 10.5, color: '#7e8590', fontFamily: "'JetBrains Mono', monospace" }}>{it.domain} · {it.assignee}</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: it.colColor, border: `1px solid ${it.colColor}`, padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>{it.status}</span>
+                </div>
+              ))}
+              {morningItems.length === 0 && <Empty />}
+            </div>
+          </div>
+
+          {/* Bounced items */}
+          <div>
+            <SectionHead dot="#d9a93f" title={t.hdBounced} note={t.bouncedNote} />
+            <div style={s.stack}>
+              {bouncedItems.map(it => (
+                <div key={it.id} onClick={() => onOpenItem(it.id)} style={{ ...s.itemRow, border: '1px solid #34301f', background: '#1d1b14' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.dc, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, color: '#e0e3e8' }}>{it.title}</div>
+                    <div style={{ fontSize: 10.5, color: '#a89464', fontFamily: "'JetBrains Mono', monospace" }}>{it.domain} · {it.gate}</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: '#d9a93f', flexShrink: 0 }}>{t.returnedTag}</span>
+                </div>
+              ))}
+              {bouncedItems.length === 0 && <Empty />}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* Queue */}
+          <div>
+            <SectionHead dot="#a07fe0" title={t.hdQueue} />
+            <div style={s.stack}>
+              {queueItems.map(it => (
+                <div key={it.id} onClick={() => onOpenItem(it.id)} style={{ padding: '10px 12px', border: '1px solid #262a33', borderLeft: `3px solid ${it.colColor}`, borderRadius: 8, background: '#1a1d24', cursor: 'pointer' }}>
+                  <div style={{ fontSize: 12, color: '#e0e3e8' }}>{it.title}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <span style={{ fontSize: 10, color: '#7e8590', fontFamily: "'JetBrains Mono', monospace" }}>{it.domain}</span>
+                    <span style={{ fontSize: 10, color: it.colColor }}>{it.status}</span>
+                  </div>
+                </div>
+              ))}
+              {queueItems.length === 0 && <Empty />}
+            </div>
+          </div>
+
+          {/* Domain queue */}
+          <div>
+            <SectionHead dot="#3fb6a8" title={t.hdDomainQueue} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {domainCounts.filter(d => d.count > 0).map(d => (
+                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px', border: '1px solid #262a33', borderRadius: 20, background: '#1a1d24' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.dc }} />
+                  <span style={{ fontSize: 11.5, color: '#c8cdd5' }}>{d.name}</span>
+                  <span style={{ fontSize: 11, color: '#7e8590', fontFamily: "'JetBrains Mono', monospace" }}>{d.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SectionHead({ dot, title, note }: { dot: string; title: string; note?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#c8cdd5' }}>{title}</h3>
+      {note && <span style={{ fontSize: 10, color: '#6a7078' }}>{note}</span>}
     </div>
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div style={styles.statCard}>
-      <span style={{ ...styles.statValue, color }}>{value}</span>
-      <span style={styles.statLabel}>{label}</span>
-    </div>
-  );
+function Empty() {
+  return <div style={{ fontSize: 12, color: '#4a5268', padding: '8px 0' }}>—</div>;
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 36px", color: "#c8d0e8", maxWidth: 900 },
-  heading: { fontSize: 22, fontWeight: 700, margin: "0 0 4px", color: "#e8e8e8" },
-  headingJa: { fontSize: 14, fontWeight: 400, color: "#4a5268", marginLeft: 8 },
-  sub: { fontSize: 13, color: "#4a5268", margin: "0 0 28px" },
-  statsRow: { display: "flex", gap: 16, marginBottom: 32, flexWrap: "wrap" },
-  statCard: {
-    background: "#1a1f2e", border: "1px solid #1e2130", borderRadius: 8,
-    padding: "16px 20px", minWidth: 120, display: "flex", flexDirection: "column", gap: 4,
-  },
-  statValue: { fontSize: 28, fontWeight: 700 },
-  statLabel: { fontSize: 11, color: "#6b7a9a" },
-  sections: { display: "flex", flexDirection: "column", gap: 24 },
-  section: { background: "#13182a", border: "1px solid #1e2130", borderRadius: 8, padding: "20px 24px" },
-  sectionTitle: { fontSize: 13, fontWeight: 600, color: "#7b8aad", margin: "0 0 14px", textTransform: "uppercase", letterSpacing: 1 },
-  workRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
-  badge: { fontSize: 10, padding: "2px 8px", borderRadius: 4, color: "#fff", fontWeight: 600 },
-  workTitle: { fontSize: 13, color: "#c8d0e8", flex: 1 },
-  actorTag: { fontSize: 11, color: "#4a5268", background: "#1a1f2e", padding: "2px 8px", borderRadius: 4 },
-  agentRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
-  agentDot: { width: 8, height: 8, borderRadius: "50%", background: "#5cb85c", flexShrink: 0 },
-  agentName: { fontSize: 13, color: "#c8d0e8", fontWeight: 500 },
-  agentRole: { fontSize: 11, color: "#4a5268", background: "#1a1f2e", padding: "2px 8px", borderRadius: 4 },
-  agentWork: { fontSize: 11, color: "#4a5268" },
-  alertRow: { padding: "10px 14px", marginBottom: 8, background: "#1a1f2e", borderRadius: 4 },
-  alertMsg: { fontSize: 13, color: "#c8d0e8" },
-  empty: { fontSize: 13, color: "#3d4560", margin: 0 },
+const s: Record<string, React.CSSProperties> = {
+  page: { padding: '26px 28px 40px', maxWidth: 1100 },
+  h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#e6e8ec' },
+  sub: { margin: '6px 0 0', color: '#8b919c', fontSize: 13 },
+  mono: { fontSize: 11, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace" },
+  summaryBar: { marginTop: 18, padding: '14px 16px', background: '#171f1c', border: '1px solid #25382f', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 },
+  greenDot: { width: 8, height: 8, borderRadius: '50%', background: '#5fb89f', flexShrink: 0 },
+  statGrid: { marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 },
+  statCard: { textAlign: 'left', border: '1px solid #262a33', background: '#1a1d24', borderRadius: 11, padding: '15px 16px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6 },
+  panels: { marginTop: 22, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 },
+  stack: { display: 'flex', flexDirection: 'column', gap: 8 },
+  itemRow: { display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', border: '1px solid #262a33', borderRadius: 9, background: '#1a1d24', cursor: 'pointer' },
 };

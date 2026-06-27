@@ -1,72 +1,106 @@
-import { mockWorkItems, mockContextCards } from "../types/mock-data";
-import type { WorkItemStatus } from "../types";
+import type { EnrichedWorkItem } from '../types';
+import type { Translations } from '../i18n';
 
-const columns: { status: WorkItemStatus; label: string; color: string }[] = [
-  { status: "open", label: "Open", color: "#4a90d9" },
-  { status: "in_progress", label: "In Progress", color: "#f5a623" },
-  { status: "needs_human", label: "Needs Human", color: "#e05252" },
-  { status: "done", label: "Done", color: "#5cb85c" },
+const COLS = [
+  { key: 'inbox' as const, name: 'Inbox', color: '#6a7078' },
+  { key: 'ai' as const, name: 'AI Working', color: '#5b8def' },
+  { key: 'human' as const, name: 'Needs Human', color: '#d9a93f' },
+  { key: 'gate' as const, name: 'Expert / Gate', color: '#a07fe0' },
+  { key: 'done' as const, name: 'Done / Logged', color: '#5fb87a' },
 ];
 
-export function WorkBoard() {
-  const contextMap = Object.fromEntries(mockContextCards.map((c) => [c.id, c.title]));
+interface WorkBoardProps {
+  items: EnrichedWorkItem[];
+  t: Translations;
+  onOpenItem: (id: string) => void;
+}
 
+export function WorkBoard({ items, t, onOpenItem }: WorkBoardProps) {
   return (
-    <div style={styles.page}>
-      <h1 style={styles.heading}>Work Board <span style={styles.headingJa}>作業ボード</span></h1>
-      <p style={styles.sub}>Work Items for humans and AI agents across all business functions.</p>
+    <section style={s.page}>
+      <div style={{ flexShrink: 0 }}>
+        <h1 style={s.h1}>Work Board</h1>
+        <p style={s.sub}>{t.subBoard}</p>
+        <div style={s.legend}>
+          <LegendDot dot="#3fb6a8" round label={t.legendAI} />
+          <LegendDot dot="#5b8def" round label={t.legendHuman} />
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#7e8590' }}>
+            <span style={{ width: 14, height: 9, borderRadius: 3, background: '#241f16', border: '1px solid #3a3220' }} />
+            {t.legendGate}
+          </span>
+        </div>
+      </div>
 
-      <div style={styles.board}>
-        {columns.map((col) => {
-          const items = mockWorkItems.filter((w) => w.status === col.status);
+      <div style={s.board}>
+        {COLS.map(col => {
+          const colItems = items.filter(i => i.col === col.key);
           return (
-            <div key={col.status} style={styles.column}>
-              <div style={styles.columnHeader}>
-                <span style={{ ...styles.columnDot, background: col.color }} />
-                <span style={styles.columnLabel}>{col.label}</span>
-                <span style={styles.columnCount}>{items.length}</span>
+            <div key={col.key} style={s.col}>
+              <div style={s.colHeader}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: col.color }} />
+                <span style={s.colName}>{col.name}</span>
+                <span style={s.colCount}>{colItems.length}</span>
               </div>
-              {items.map((wi) => (
-                <div key={wi.id} style={styles.card}>
-                  <div style={styles.cardTitle}>{wi.title}</div>
-                  <div style={styles.cardMeta}>
-                    <span style={styles.actorTag}>{wi.actor_name}</span>
-                    {wi.context_id && (
-                      <span style={styles.contextTag}>
-                        {contextMap[wi.context_id] ?? wi.context_id}
-                      </span>
-                    )}
-                  </div>
-                  <div style={styles.cardSummary}>{wi.summary}</div>
-                  <div style={styles.cardDate}>{wi.updated_at.slice(0, 10)}</div>
-                </div>
-              ))}
-              {items.length === 0 && <div style={styles.empty}>—</div>}
+              <div style={{ flex: 1, background: '#15181e', border: '1px solid #232730', borderRadius: 11, padding: 9, display: 'flex', flexDirection: 'column', gap: 9, minHeight: 120 }}>
+                {colItems.map(it => <WorkCard key={it.id} item={it} onOpen={() => onOpenItem(it.id)} />)}
+              </div>
             </div>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+function WorkCard({ item, onOpen }: { item: EnrichedWorkItem; onOpen: () => void }) {
+  return (
+    <div onClick={onOpen} style={{ ...s.card, borderLeft: `3px solid ${item.dc}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: '#aeb4bf' }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.dc }} />{item.domain}
+        </span>
+        <span style={{ fontSize: 9.5, color: item.riskColor, border: `1px solid ${item.riskColor}`, padding: '2px 6px', borderRadius: 5 }}>{item.riskLabel}</span>
+      </div>
+      <div style={s.cardTitle}>{item.title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10.5, color: '#8b919c', fontFamily: "'JetBrains Mono', monospace" }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.actorColor }} />
+        {item.assignee} <span style={{ color: '#4f555f' }}>·</span> {item.contextId}
+      </div>
+      <div style={s.nextAction}>→ {item.nextAction}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={s.gateChip}>⚑ {item.gate}</span>
+        {item.rde && <span style={s.rdeChip}>RDE要</span>}
+      </div>
+      <div style={s.tagRow}>
+        {['文脈', '引継', '証跡', '監査'].map(t => <span key={t} style={s.tag}>{t}</span>)}
       </div>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: { padding: "32px 36px", color: "#c8d0e8", height: "100vh", overflowY: "auto" },
-  heading: { fontSize: 22, fontWeight: 700, margin: "0 0 4px", color: "#e8e8e8" },
-  headingJa: { fontSize: 14, fontWeight: 400, color: "#4a5268", marginLeft: 8 },
-  sub: { fontSize: 13, color: "#4a5268", margin: "0 0 28px" },
-  board: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, alignItems: "start" },
-  column: { background: "#13182a", border: "1px solid #1e2130", borderRadius: 8, padding: "16px 14px", minHeight: 120 },
-  columnHeader: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 },
-  columnDot: { width: 8, height: 8, borderRadius: "50%" },
-  columnLabel: { fontSize: 12, fontWeight: 600, color: "#7b8aad", flex: 1 },
-  columnCount: { fontSize: 11, color: "#3d4560", background: "#1a1f2e", padding: "1px 6px", borderRadius: 4 },
-  card: { background: "#0f1117", border: "1px solid #1e2130", borderRadius: 6, padding: "12px", marginBottom: 10 },
-  cardTitle: { fontSize: 12, fontWeight: 600, color: "#c8d0e8", marginBottom: 8, lineHeight: 1.4 },
-  cardMeta: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 },
-  actorTag: { fontSize: 10, color: "#7b8aad", background: "#1a1f2e", padding: "1px 6px", borderRadius: 3 },
-  contextTag: { fontSize: 10, color: "#4a5268", background: "#1a1f2e", padding: "1px 6px", borderRadius: 3, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  cardSummary: { fontSize: 11, color: "#4a5268", lineHeight: 1.5, marginBottom: 8 },
-  cardDate: { fontSize: 10, color: "#2e3450" },
-  empty: { fontSize: 12, color: "#2e3450", textAlign: "center", padding: "20px 0" },
+function LegendDot({ dot, round, label }: { dot: string; round?: boolean; label: string }) {
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#7e8590' }}>
+      <span style={{ width: 9, height: 9, borderRadius: round ? '50%' : 3, background: dot }} />{label}
+    </span>
+  );
+}
+
+const s: Record<string, React.CSSProperties> = {
+  page: { padding: '26px 28px 12px', height: '100%', display: 'flex', flexDirection: 'column' },
+  h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#e6e8ec' },
+  sub: { margin: '6px 0 0', color: '#8b919c', fontSize: 13 },
+  legend: { display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 },
+  board: { flex: 1, marginTop: 18, display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 18, alignItems: 'flex-start' },
+  col: { width: 268, flexShrink: 0, display: 'flex', flexDirection: 'column' },
+  colHeader: { display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px 10px' },
+  colName: { fontSize: 12.5, fontWeight: 600, color: '#d3d8df' },
+  colCount: { fontSize: 11, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace" },
+  card: { background: '#1b1e25', border: '1px solid #2a2f3a', borderRadius: 9, padding: '11px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 8 },
+  cardTitle: { fontSize: 12.5, fontWeight: 500, color: '#e6e8ec', lineHeight: 1.4 },
+  nextAction: { fontSize: 10.5, color: '#9aa1ad', background: '#171a20', border: '1px solid #262a33', borderRadius: 6, padding: '5px 8px' },
+  gateChip: { fontSize: 9.5, color: '#c9b27a', background: '#241f16', border: '1px solid #3a3220', padding: '3px 7px', borderRadius: 5 },
+  rdeChip: { fontSize: 9.5, color: '#b6a6ee', background: '#1d1a29', border: '1px solid #322c47', padding: '3px 7px', borderRadius: 5 },
+  tagRow: { display: 'flex', gap: 4, paddingTop: 2, borderTop: '1px solid #23272f' },
+  tag: { fontSize: 9, color: '#6a7078', background: '#16191f', padding: '2px 6px', borderRadius: 4 },
 };
