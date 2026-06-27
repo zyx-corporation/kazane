@@ -59,6 +59,10 @@ export interface WorkItem {
   rdeAudit?: RdeAudit;
   gatePerm: string;
   gateStops: string;
+  // v0.2: agent queue
+  agentPickedUpAt?: string;
+  agentEscalated?: boolean;
+  escalationReason?: string;
 }
 
 export interface EnrichedWorkItem extends WorkItem {
@@ -98,6 +102,9 @@ export interface HandoffNote {
   ev: string[];
   gate: string;
   ask: string;
+  // v0.2: agent-submitted fields
+  escalated?: boolean;
+  escalationReason?: string;
 }
 
 export interface GateRule {

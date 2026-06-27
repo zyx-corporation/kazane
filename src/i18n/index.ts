@@ -46,6 +46,14 @@ export interface Translations {
   newCtxModalTitle: string; fCtxTitle: string; fCtxQuestion: string;
   ctxTitlePh: string; ctxQuestionPh: string; btnAddCtx: string;
   goCtxCard: string;
+  // v0.2 additions
+  btnAssignAgent: string;
+  toastAgentAssigned: string;
+  toastAgentHandoffReceived: string;
+  toastAgentEscalated: string;
+  agentPickedUpLabel: string;
+  agentEscalatedLabel: string;
+  agentQueueEmpty: string;
 }
 
 const T: Record<Lang, Translations> = {
@@ -92,6 +100,13 @@ const T: Record<Lang, Translations> = {
     newCtxModalTitle: 'Context Card 新規作成', fCtxTitle: 'タイトル', fCtxQuestion: '問い（この仕事が生まれた問い）',
     ctxTitlePh: '例：顧客との合意形成プロセス', ctxQuestionPh: '例：なぜこの案件は合意に時間がかかっているのか？', btnAddCtx: 'Context Card を追加',
     goCtxCard: 'Context Card を開く →',
+    btnAssignAgent: 'エージェントに割り当てる',
+    toastAgentAssigned: '{id} をエージェントに割り当てました',
+    toastAgentHandoffReceived: 'エージェントから引き継ぎを受け取りました — {id}',
+    toastAgentEscalated: 'エージェントがエスカレーション — {id} → Gate',
+    agentPickedUpLabel: 'エージェント着手',
+    agentEscalatedLabel: 'エスカレーション',
+    agentQueueEmpty: '割り当て待ちのタスクはありません',
   },
   en: {
     tagline1: 'Hear the signals of work,', tagline2: 'chronicle the lineage of decisions.',
@@ -136,6 +151,13 @@ const T: Record<Lang, Translations> = {
     newCtxModalTitle: 'New Context Card', fCtxTitle: 'Title', fCtxQuestion: 'Question (what created this work)',
     ctxTitlePh: 'e.g. Customer agreement process', ctxQuestionPh: 'e.g. Why is consensus taking so long?', btnAddCtx: 'Add Context Card',
     goCtxCard: 'Open Context Card →',
+    btnAssignAgent: 'Assign to Agent',
+    toastAgentAssigned: '{id} assigned to agent',
+    toastAgentHandoffReceived: 'Agent handoff received — {id}',
+    toastAgentEscalated: 'Agent escalated — {id} → Gate',
+    agentPickedUpLabel: 'Agent picked up',
+    agentEscalatedLabel: 'Escalated',
+    agentQueueEmpty: 'No tasks pending for agent',
   },
   zh: {
     tagline1: '聆听工作的气息，', tagline2: '记录决策的脉络。',
@@ -180,6 +202,13 @@ const T: Record<Lang, Translations> = {
     newCtxModalTitle: '新建 Context Card', fCtxTitle: '标题', fCtxQuestion: '提问（催生此项工作的提问）',
     ctxTitlePh: '例：与客户的共识形成过程', ctxQuestionPh: '例：为什么这个项目的共识需要这么长时间？', btnAddCtx: '添加 Context Card',
     goCtxCard: '打开 Context Card →',
+    btnAssignAgent: '分配给 Agent',
+    toastAgentAssigned: '{id} 已分配给 Agent',
+    toastAgentHandoffReceived: '收到 Agent 交接 — {id}',
+    toastAgentEscalated: 'Agent 已上报 — {id} → Gate',
+    agentPickedUpLabel: 'Agent 已接手',
+    agentEscalatedLabel: '已上报',
+    agentQueueEmpty: '没有待处理的 Agent 任务',
   },
 };
 

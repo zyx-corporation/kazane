@@ -44,6 +44,12 @@ pub struct ContextCardRow {
     pub updated_at: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct AgentDirs {
+    pub tasks_dir: String,
+    pub handoffs_dir: String,
+}
+
 fn migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -91,12 +97,79 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 2,
+            description: "add_agent_fields",
+            sql: "
+                ALTER TABLE work_items ADD COLUMN agent_picked_up_at TEXT DEFAULT NULL;
+                ALTER TABLE work_items ADD COLUMN agent_escalated INTEGER DEFAULT 0;
+                ALTER TABLE work_items ADD COLUMN escalation_reason TEXT DEFAULT '';
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
 #[tauri::command]
 fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+async fn get_agent_dirs(app: tauri::AppHandle) -> Result<AgentDirs, String> {
+    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let tasks_dir = base.join("tasks");
+    let handoffs_dir = base.join("handoffs");
+    std::fs::create_dir_all(&tasks_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&handoffs_dir).map_err(|e| e.to_string())?;
+    Ok(AgentDirs {
+        tasks_dir: tasks_dir.to_string_lossy().into_owned(),
+        handoffs_dir: handoffs_dir.to_string_lossy().into_owned(),
+    })
+}
+
+#[tauri::command]
+async fn write_agent_task(app: tauri::AppHandle, id: String, payload: String) -> Result<(), String> {
+    let tasks_dir = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("tasks");
+    std::fs::create_dir_all(&tasks_dir).map_err(|e| e.to_string())?;
+    let path = tasks_dir.join(format!("{id}.json"));
+    std::fs::write(path, payload).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn poll_agent_handoffs(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let handoffs_dir = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("handoffs");
+    if !handoffs_dir.exists() {
+        return Ok(vec![]);
+    }
+    let ids = std::fs::read_dir(&handoffs_dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let name = entry.file_name().into_string().ok()?;
+            if name.ends_with(".json") {
+                Some(name.trim_end_matches(".json").to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+    Ok(ids)
+}
+
+#[tauri::command]
+async fn read_agent_handoff(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("handoffs")
+        .join(format!("{id}.json"));
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    Ok(content)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -116,7 +189,13 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![app_version])
+        .invoke_handler(tauri::generate_handler![
+            app_version,
+            get_agent_dirs,
+            write_agent_task,
+            poll_agent_handoffs,
+            read_agent_handoff,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running kazane");
 }

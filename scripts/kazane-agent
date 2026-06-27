@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# kazane-agent — Agent CLI for Kazane Work OS (v0.2 nagare)
+#
+# Reads Work Items from the Kazane task queue and writes back Handoff Notes.
+# Kazane polls the handoffs directory every 10s and auto-imports results.
+#
+# Usage:
+#   kazane-agent list                          — list pending tasks
+#   kazane-agent pickup                        — print task JSON for each pending item
+#   kazane-agent submit <WI-ID>                — submit a completed handoff
+#   kazane-agent submit <WI-ID> --escalate "reason"  — submit with escalation
+#   kazane-agent auto                          — auto-process all pending tasks (demo)
+#   kazane-agent dirs                          — print task/handoff directory paths
+#
+# Directory locations (macOS):
+#   Tasks:    ~/Library/Application Support/jp.zyxcorp.kazane/tasks/
+#   Handoffs: ~/Library/Application Support/jp.zyxcorp.kazane/handoffs/
+
+set -euo pipefail
+
+BUNDLE_ID="jp.zyxcorp.kazane"
+
+if [[ "$(uname)" == "Darwin" ]]; then
+  BASE_DIR="$HOME/Library/Application Support/$BUNDLE_ID"
+else
+  BASE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/$BUNDLE_ID"
+fi
+
+TASKS_DIR="$BASE_DIR/tasks"
+HANDOFFS_DIR="$BASE_DIR/handoffs"
+
+mkdir -p "$HANDOFFS_DIR"
+
+_json_field() {
+  # Extract a JSON string field using python3
+  local file="$1" field="$2"
+  python3 -c "
+import json, sys
+try:
+    with open('$file') as f:
+        d = json.load(f)
+    print(d.get('$field', ''))
+except Exception:
+    print('')
+" 2>/dev/null
+}
+
+_json_field_stdin() {
+  local field="$1"
+  python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(d.get('$field', ''))
+except Exception:
+    print('')
+"
+}
+
+_pending_tasks() {
+  if [ -d "$TASKS_DIR" ]; then
+    find "$TASKS_DIR" -maxdepth 1 -name '*.json' 2>/dev/null || true
+  fi
+}
+
+_submit_handoff() {
+  local wi_id="$1" escalate="${2:-false}" escalation_reason="${3:-}"
+  local task_file="$TASKS_DIR/$wi_id.json"
+
+  if [ ! -f "$task_file" ]; then
+    echo "Error: task file not found: $task_file" >&2
+    exit 1
+  fi
+
+  local title domain assignee context_id
+  title=$(_json_field "$task_file" "title")
+  domain=$(_json_field "$task_file" "domain")
+  assignee=$(_json_field "$task_file" "assignee")
+  context_id=$(_json_field "$task_file" "contextId")
+
+  local ts ho_id
+  ts=$(date +%s)
+  ho_id="HO-$(echo "$ts" | tail -c 5 | sed 's/^0*//')"
+
+  python3 - "$HANDOFFS_DIR/$wi_id.json" <<PYEOF
+import json, sys, os
+
+wi_id = "$wi_id"
+title = "$title"
+domain = "$domain"
+assignee = "$assignee"
+context_id = "$context_id"
+escalate = $escalate
+escalation_reason = "$escalation_reason"
+ho_id = "$ho_id"
+out_path = sys.argv[1]
+
+ho = {
+    "id": ho_id,
+    "wi": f"{wi_id} {title}",
+    "assignee": assignee,
+    "domain": domain,
+    "did": "エージェントが指示に従い、関連情報を整理・分析し作業案を作成した。" if not escalate else "エージェントが着手し、責任境界に到達したため停止した。",
+    "judged": "責任範囲内で完了と判断した。" if not escalate else "",
+    "couldnt": "" if not escalate else (escalation_reason or "責任境界を超えるため判断できなかった。"),
+    "uncertain": "詳細は人間が確認を要する可能性あり。" if not escalate else "エスカレーション判断の適切性を人間が確認されたい。",
+    "bounce": "" if not escalate else "責任境界を超えるため人間判断へ引き継ぐ。",
+    "next": "完了。Evidence Logへの記録を推奨。" if not escalate else "人間が状況を確認し、次アクションを判断する。",
+    "updCtx": f"{context_id} を更新予定。" if context_id and context_id != "—" else "",
+    "ev": [],
+    "gate": "エスカレーション" if escalate else "",
+    "ask": "人間が判断・承認をお願いします。" if escalate else "",
+    "escalated": escalate,
+    "escalationReason": escalation_reason or ("責任境界超過" if escalate else ""),
+}
+
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(ho, f, ensure_ascii=False, indent=2)
+print(f"Handoff written: {out_path}")
+PYEOF
+}
+
+cmd="${1:-list}"
+
+case "$cmd" in
+  dirs)
+    echo "Tasks:    $TASKS_DIR"
+    echo "Handoffs: $HANDOFFS_DIR"
+    ;;
+
+  list)
+    echo "=== Pending agent tasks ==="
+    tasks=()
+    while IFS= read -r f; do
+      [ -n "$f" ] && tasks+=("$f")
+    done < <(_pending_tasks)
+
+    if [ ${#tasks[@]} -eq 0 ]; then
+      echo "  (no pending tasks)"
+    else
+      for f in "${tasks[@]}"; do
+        wi_id=$(basename "$f" .json)
+        title=$(_json_field "$f" "title")
+        domain=$(_json_field "$f" "domain")
+        risk=$(_json_field "$f" "risk")
+        printf "  [%s] %s  domain=%s risk=%s\n" "$wi_id" "$title" "$domain" "$risk"
+      done
+    fi
+    ;;
+
+  pickup)
+    tasks=()
+    while IFS= read -r f; do
+      [ -n "$f" ] && tasks+=("$f")
+    done < <(_pending_tasks)
+
+    if [ ${#tasks[@]} -eq 0 ]; then
+      echo "No pending tasks."
+      exit 0
+    fi
+    for f in "${tasks[@]}"; do
+      wi_id=$(basename "$f" .json)
+      echo ""
+      echo "=== Task: $wi_id ==="
+      cat "$f"
+      echo ""
+    done
+    ;;
+
+  submit)
+    wi_id="${2:-}"
+    if [ -z "$wi_id" ]; then
+      echo "Usage: kazane-agent submit <WI-ID> [--escalate \"reason\"]" >&2
+      exit 1
+    fi
+    if [ "${3:-}" = "--escalate" ]; then
+      reason="${4:-責任境界を超えるため停止。}"
+      _submit_handoff "$wi_id" "True" "$reason"
+    else
+      _submit_handoff "$wi_id" "False" ""
+    fi
+    echo "Kazane will pick up the handoff within 10 seconds."
+    ;;
+
+  auto)
+    tasks=()
+    while IFS= read -r f; do
+      [ -n "$f" ] && tasks+=("$f")
+    done < <(_pending_tasks)
+
+    if [ ${#tasks[@]} -eq 0 ]; then
+      echo "No pending tasks."
+      exit 0
+    fi
+    echo "Auto-processing ${#tasks[@]} task(s)..."
+    for f in "${tasks[@]}"; do
+      wi_id=$(basename "$f" .json)
+      echo "  Processing: $wi_id"
+      _submit_handoff "$wi_id" "False" ""
+    done
+    echo "Done. Kazane will pick up handoffs within 10 seconds."
+    ;;
+
+  help|--help|-h)
+    grep '^#' "$0" | sed 's/^# \{0,1\}//' | tail -n +2
+    ;;
+
+  *)
+    echo "Unknown command: $cmd" >&2
+    echo "Run 'kazane-agent help' for usage." >&2
+    exit 1
+    ;;
+esac

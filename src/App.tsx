@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem } from './types';
+import { invoke } from '@tauri-apps/api/core';
+import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
 import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData } from './data/seed';
@@ -251,6 +252,66 @@ export default function App() {
     flash(t.toastDeleted.replace('{id}', id));
   }
 
+  function assignToAgent(id: string) {
+    const it = items.find(i => i.id === id);
+    if (!it) return;
+    const now = new Date().toISOString();
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== id) return i;
+      changed = { ...i, col: 'ai' as BoardCol, status: COL_NAMES['ai'], agentPickedUpAt: now, agentEscalated: false, escalationReason: '' };
+      return changed;
+    });
+    setItems(updated); persist(updated, changed);
+    if (IS_TAURI) {
+      invoke('write_agent_task', { id, payload: JSON.stringify({ ...it, agentPickedUpAt: now }) }).catch(() => {});
+    }
+    flash(t.toastAgentAssigned.replace('{id}', id));
+  }
+
+  const importAgentHandoff = useCallback((ho: HandoffNote) => {
+    setHandoffs(prev => [ho, ...prev]);
+    setHoSel(ho.id);
+    const wiId = ho.wi.split(' ')[0];
+    const escalated = ho.escalated ?? false;
+    const targetCol: BoardCol = escalated ? 'gate' : 'done';
+    setItems(prev => {
+      let changed: WorkItem | undefined;
+      const updated = prev.map(i => {
+        if (i.id !== wiId) return i;
+        changed = {
+          ...i, col: targetCol, status: COL_NAMES[targetCol],
+          agentEscalated: escalated,
+          escalationReason: ho.escalationReason ?? '',
+          bounced: escalated ? true : i.bounced,
+          ho: { ...i.ho, did: ho.did, judged: ho.judged, couldnt: ho.couldnt, uncertain: ho.uncertain, bounce: ho.bounce, next: ho.next },
+          nextAction: targetCol === 'done' ? '完了・記録済' : i.nextAction,
+        };
+        return changed;
+      });
+      persistLocal(updated);
+      if (IS_TAURI && dbReady && changed) dbUpsertItem(changed).catch(() => {});
+      return updated;
+    });
+    if (escalated) flash(t.toastAgentEscalated.replace('{id}', wiId));
+    else flash(t.toastAgentHandoffReceived.replace('{id}', wiId));
+  }, [dbReady, t]);
+
+  // Poll for agent handoffs every 10s (Tauri only)
+  useEffect(() => {
+    if (!IS_TAURI) return;
+    const interval = setInterval(async () => {
+      try {
+        const ids = await invoke<string[]>('poll_agent_handoffs');
+        for (const wiId of ids) {
+          const json = await invoke<string>('read_agent_handoff', { id: wiId });
+          importAgentHandoff(JSON.parse(json) as HandoffNote);
+        }
+      } catch (_) {}
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [importAgentHandoff]);
+
   function addItem(partial: Partial<WorkItem> & { title: string; domain: string; assignee: string }) {
     const id = nextId(items);
     const isAI = isAiActor(partial.assignee);
@@ -417,6 +478,7 @@ export default function App() {
           onBounce={bounce}
           onRunRde={runRde}
           onAiRun={aiRun}
+          onAssignToAgent={assignToAgent}
           onEditItem={editItem}
           onDeleteItem={deleteItem}
           onGoCtx={() => { nav('context'); }}

@@ -31,6 +31,7 @@ interface WorkItemDrawerProps {
   onBounce: (id: string) => void;
   onRunRde: (id: string) => void;
   onAiRun: (id: string) => void;
+  onAssignToAgent: (id: string) => void;
   onEditItem: (id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string }) => void;
   onDeleteItem: (id: string) => void;
   onGoCtx: () => void;
@@ -40,11 +41,12 @@ interface WorkItemDrawerProps {
   onGoGate: () => void;
 }
 
-export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onEditItem, onDeleteItem, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
 
   const canAiRun = isAiActor(item.assignee) && (item.col === 'inbox' || item.col === 'ai');
+  const canAssignAgent = isAiActor(item.assignee) && item.col === 'inbox';
   const hasRde = !!(item.rde && item.rdeAudit);
   const hasCtx = item.contextId && item.contextId !== '—';
   const ev = (item.ev || []).map(e => ({ ...e, trustColor: trustColor(e.trust) }));
@@ -226,6 +228,23 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
 
         {/* Footer */}
         <div style={s.footer}>
+          {item.agentPickedUpAt && (
+            <div style={{ fontSize: 10, color: '#5fb89f', fontFamily: "'JetBrains Mono', monospace", marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5fb89f', flexShrink: 0 }} />
+              {item.agentEscalated ? t.agentEscalatedLabel : t.agentPickedUpLabel}
+              {' · '}
+              {new Date(item.agentPickedUpAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+              {item.agentEscalated && item.escalationReason && (
+                <span style={{ color: '#d9a93f', marginLeft: 4 }}>{item.escalationReason}</span>
+              )}
+            </div>
+          )}
+          {canAssignAgent && (
+            <button onClick={() => onAssignToAgent(item.id)} style={s.agentBtn}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3fb6a8' }} />
+              {t.btnAssignAgent}
+            </button>
+          )}
           {canAiRun && (
             <button onClick={() => onAiRun(item.id)} style={s.aiRunBtn}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#5fb89f' }} />
@@ -291,6 +310,7 @@ const s: Record<string, React.CSSProperties> = {
   stack: { display: 'flex', flexDirection: 'column', gap: 13 },
   linkBtn: { border: '1px solid #2d323d', background: '#1b1e25', color: '#9cc0f5', padding: 8, borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const },
   footer: { padding: '12px 20px 0', borderTop: '1px solid #262a33', flexShrink: 0 },
+  agentBtn: { width: '100%', border: '1px solid #1d3840', background: '#131f22', color: '#7dd4cc', padding: 9, borderRadius: 8, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 },
   aiRunBtn: { width: '100%', border: '1px solid #25382b', background: '#161d18', color: '#9fd9c0', padding: 9, borderRadius: 8, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 },
   footerActions: { padding: '12px 20px 14px', display: 'flex', gap: 8, flexShrink: 0 },
   bounceBtn: { flex: 1, border: '1px solid #3a2329', background: '#1f1417', color: '#e7bccb', padding: 9, borderRadius: 8, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' },
