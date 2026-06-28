@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry } from './types';
+import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry, GateRule, AgentProfile } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
-import { gateRulesData, agentProfilesData } from './data/seed';
 import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
@@ -84,6 +83,8 @@ export default function App() {
   const [contexts, setContexts] = useState<ContextCard[]>([]);
   const [handoffs, setHandoffs] = useState<HandoffNote[]>([]);
   const [evidenceLog, setEvidenceLog] = useState<EvidenceLogEntry[]>([]);
+  const [gateRules] = useState<GateRule[]>([]);
+  const [agentProfiles] = useState<AgentProfile[]>([]);
   const [dbReady, setDbReady] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
   const [tab, setTab] = useState<DrawerTab>('context');
@@ -516,7 +517,7 @@ export default function App() {
             />
           )}
           {screen === 'gate' && (
-            <EscalationGate gateRules={gateRulesData} agentProfiles={agentProfilesData} gateDomain={gateDomain} t={t} items={enriched} onSetGateDomain={setGateDomain} />
+            <EscalationGate gateRules={gateRules} agentProfiles={agentProfiles} gateDomain={gateDomain} t={t} items={enriched} onSetGateDomain={setGateDomain} />
           )}
           {screen === 'rde' && (
             <RdeEvidenceAudit evidenceLog={evidenceLog} t={t}
