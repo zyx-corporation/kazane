@@ -341,24 +341,29 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-402", "v0.4: CLI/MCPプロトタイプ — エージェントツール基盤",
-        "開発", "Claude Code", "inbox", "中", "CTX-V04",
-        "CLIまたはMCPサーバーの設計と最小実装", "外部公開・本番反映はTomoyukiが判断",
+        "開発", "Claude Code", "ai", "中", "CTX-V04",
+        "PRレビュー・マージ待ち", "外部公開・本番反映はTomoyukiが判断",
         False, False, False,
         "設計・実装・プロトタイプ",
         "外部公開／本番反映／セキュリティ影響",
         ctx={
             "question": "kazane-agentをMCPサーバー化またはCLI強化することで、AI開発ツールとの統合基盤を作れるか。",
             "purpose": "Tech Lead/QA/Reviewer/RDEエージェントが開発ワークフローを自律的に進められる基盤を実証する。",
-            "constraint": "ツール権限はADR-0013の境界を尊重。外部公開はTomoyukiが判断。",
-            "unresolved": "MCP vs CLIの選択基準。ツール呼び出しの権限スコープ。",
+            "constraint": "ツール権限はADR-0013の境界を尊重。外部公開はTomoyukiが判断。MCP化はv0.5以降とする。",
+            "unresolved": "MCP化の優先度。ツール呼び出しの権限スコープ設計。",
         },
         ho={
-            "did": "未着手。",
-            "uncertain": "MCPプロトコルとTauriコマンドブリッジの統合方式。",
+            "did": "kazane-agentにread/update/status/createサブコマンドを追加。SQLite直接操作でCLIからWI作成・参照・更新・プロジェクト状況確認が可能になった。Claude CodeからKazane DBへの読み書きがCLIで完結する最小ツール基盤を実現。",
+            "judged": "CLI強化が先決。MCP化はv0.5以降のタスクとして切り出す。",
+            "couldnt": "MCPプロトコル対応・Tauri IPC統合は未実装。",
+            "uncertain": "MCP化の設計方針（stdioかHTTPか）。",
             "bounce": "—",
-            "next": "ADR-0013のコントロールプレーン分離設計と合わせて検討。",
+            "next": "PRを作成してTomoyukiにレビュー依頼。MCP化はWI-501に分離。",
+            "updCtx": "CTX-V04 のpastにWI-402完了を記録。",
         },
-        ev=[],
+        ev=[
+            {"type": "コード変更", "label": "kazane-agent read/update/status/create実装", "trust": "高"},
+        ],
         created_at="2026-06-28T09:00:00",
     ),
 

@@ -7,7 +7,10 @@
 # Usage:
 #   kazane-agent list                          — list pending tasks
 #   kazane-agent pickup                        — print task JSON for each pending item
+#   kazane-agent status                        — project overview (all items by column)
+#   kazane-agent read <WI-ID>                  — print full Work Item as JSON
 #   kazane-agent create --title <title> [opts] — create a new Work Item in SQLite
+#   kazane-agent update <WI-ID> [opts]         — patch fields on an existing Work Item
 #   kazane-agent submit <WI-ID>                — submit a completed handoff
 #   kazane-agent submit <WI-ID> --escalate "reason"  — submit with escalation
 #   kazane-agent auto                          — auto-process all pending tasks (demo)
@@ -20,6 +23,13 @@
 #   --ctx <CTX-ID>       Context Card ID (default: —)
 #   --risk 低|中|高       Risk level (default: 中)
 #   --next <text>        Next action text
+#
+# update options:
+#   --col inbox|ai|human|gate|done   Move to column
+#   --title <text>                   New title
+#   --assignee <text>                New assignee
+#   --risk 低|中|高                   New risk level
+#   --next <text>                    New next action
 #
 # Directory locations (macOS):
 #   Tasks:    ~/Library/Application Support/jp.zyxcorp.kazane/tasks/
@@ -297,6 +307,131 @@ PYEOF
       _submit_handoff "$wi_id" "False" ""
     done
     echo "Done. Kazane will pick up handoffs within 10 seconds."
+    ;;
+
+  read)
+    wi_id="${2:-}"
+    if [ -z "$wi_id" ]; then
+      echo "Usage: kazane-agent read <WI-ID>" >&2
+      exit 1
+    fi
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2; exit 1
+    fi
+    python3 - "$DB_PATH" "$wi_id" <<'PYEOF'
+import sqlite3, json, sys
+db_path, wi_id = sys.argv[1], sys.argv[2]
+con = sqlite3.connect(db_path)
+con.row_factory = sqlite3.Row
+row = con.execute("SELECT * FROM work_items WHERE id=?", (wi_id,)).fetchone()
+if not row:
+    print(f"Not found: {wi_id}", file=sys.stderr)
+    sys.exit(1)
+d = dict(row)
+for k in ("ctx_json","ho_json","ev_json","rde_audit_json","github_links_json"):
+    if d.get(k):
+        d[k] = json.loads(d[k])
+print(json.dumps(d, ensure_ascii=False, indent=2))
+con.close()
+PYEOF
+    ;;
+
+  update)
+    wi_id="${2:-}"
+    if [ -z "$wi_id" ]; then
+      echo "Usage: kazane-agent update <WI-ID> [--col <col>] [--title <text>] [--assignee <text>] [--risk 低|中|高] [--next <text>]" >&2
+      exit 1
+    fi
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2; exit 1
+    fi
+
+    shift 2
+    upd_col="" upd_title="" upd_assignee="" upd_risk="" upd_next=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --col)      upd_col="$2";      shift 2 ;;
+        --title)    upd_title="$2";    shift 2 ;;
+        --assignee) upd_assignee="$2"; shift 2 ;;
+        --risk)     upd_risk="$2";     shift 2 ;;
+        --next)     upd_next="$2";     shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    python3 - "$DB_PATH" "$wi_id" "$upd_col" "$upd_title" "$upd_assignee" "$upd_risk" "$upd_next" <<'PYEOF'
+import sqlite3, json, sys, datetime
+
+db_path, wi_id, col, title, assignee, risk, next_action = sys.argv[1:8]
+
+COL_STATUS = {
+    "inbox": "Inbox", "ai": "AI Working",
+    "human": "Needs Human", "gate": "Expert / Gate", "done": "Done / Logged",
+}
+now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+sets, vals = [], []
+if col:
+    sets += ["col=?", "status=?"]; vals += [col, COL_STATUS.get(col, col)]
+if title:
+    sets += ["title=?"]; vals.append(title)
+if assignee:
+    sets += ["assignee=?"]; vals.append(assignee)
+if risk:
+    sets += ["risk=?"]; vals.append(risk)
+if next_action:
+    sets += ["next_action=?"]; vals.append(next_action)
+
+if not sets:
+    print("Nothing to update — specify at least one flag.", file=sys.stderr)
+    sys.exit(1)
+
+sets.append("updated_at=?"); vals.append(now)
+vals.append(wi_id)
+con = sqlite3.connect(db_path)
+cur = con.execute(f"UPDATE work_items SET {', '.join(sets)} WHERE id=?", vals)
+con.commit()
+if cur.rowcount == 0:
+    print(f"Not found: {wi_id}", file=sys.stderr); sys.exit(1)
+print(f"Updated: {wi_id}")
+for f, v in zip(["col","title","assignee","risk","next"], [col,title,assignee,risk,next_action]):
+    if v: print(f"  {f} → {v}")
+con.close()
+PYEOF
+    ;;
+
+  status)
+    if [ ! -f "$DB_PATH" ]; then
+      echo "DB not found. Launch Kazane once to initialize." >&2; exit 1
+    fi
+    python3 - "$DB_PATH" <<'PYEOF'
+import sqlite3, json, sys
+con = sqlite3.connect(sys.argv[1])
+con.row_factory = sqlite3.Row
+
+items = con.execute("SELECT id,title,domain,assignee,col,risk,next_action FROM work_items ORDER BY col,domain").fetchall()
+handoffs = con.execute("SELECT COUNT(*) FROM handoff_notes").fetchone()[0]
+evidence = con.execute("SELECT COUNT(*) FROM evidence_log").fetchone()[0]
+ctx_count = con.execute("SELECT COUNT(*) FROM context_cards").fetchone()[0]
+
+COL_ORDER = ["inbox","ai","human","gate","done"]
+by_col = {c: [] for c in COL_ORDER}
+for r in items:
+    by_col.setdefault(r["col"], []).append(r)
+
+print(f"=== Kazane Status ===")
+print(f"  Work Items:    {len(items)}  (HandoffNotes: {handoffs}  Evidence: {evidence}  ContextCards: {ctx_count})")
+print()
+for col in COL_ORDER:
+    rows = by_col.get(col, [])
+    if not rows: continue
+    col_names = {"inbox":"Inbox","ai":"AI Working","human":"Needs Human","gate":"Expert/Gate","done":"Done/Logged"}
+    print(f"  [{col_names.get(col,col)}] ({len(rows)})")
+    for r in rows:
+        risk_mark = "!" if r["risk"]=="高" else "·"
+        print(f"    {risk_mark} {r['id']:8s}  [{r['domain']:6s}] {r['title'][:60]}")
+    print()
+con.close()
+PYEOF
     ;;
 
   help|--help|-h)
