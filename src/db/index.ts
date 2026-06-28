@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard, HandoffNote, WorkEvent } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel } from '../types';
 
 let _db: Database | null = null;
 
@@ -136,6 +136,34 @@ export async function dbListEvents(wiId: string): Promise<WorkEvent[]> {
     note: r.note as string | undefined || undefined,
     createdAt: r.created_at as string,
   }));
+}
+
+// ---------- Evidence Log ----------
+
+export async function dbListEvidenceLog(): Promise<EvidenceLogEntry[]> {
+  const d = await db();
+  const rows = await d.select<Record<string, unknown>[]>('SELECT * FROM evidence_log ORDER BY created_at DESC');
+  return rows.map(r => ({
+    id: r.id as string,
+    type: r.type as string,
+    label: r.label as string,
+    trust: r.trust as TrustLevel,
+    store: r.store as string,
+    wiId: r.wi_id as string,
+    hoId: r.ho_id as string,
+    ctxId: r.ctx_id as string,
+    note: r.note as string,
+    createdAt: r.created_at as string,
+  }));
+}
+
+export async function dbAddEvidenceEntry(ev: EvidenceLogEntry): Promise<void> {
+  const d = await db();
+  await d.execute(
+    `INSERT OR IGNORE INTO evidence_log (id, type, label, trust, store, wi_id, ho_id, ctx_id, note, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [ev.id, ev.type, ev.label, ev.trust, ev.store, ev.wiId, ev.hoId, ev.ctxId, ev.note, ev.createdAt],
+  );
 }
 
 // ---------- helpers ----------

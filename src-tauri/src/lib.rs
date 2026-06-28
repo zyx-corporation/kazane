@@ -151,6 +151,25 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "create_evidence_log",
+            sql: "
+                CREATE TABLE IF NOT EXISTS evidence_log (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    type TEXT NOT NULL DEFAULT '',
+                    label TEXT NOT NULL DEFAULT '',
+                    trust TEXT NOT NULL DEFAULT '中',
+                    store TEXT NOT NULL DEFAULT '',
+                    wi_id TEXT NOT NULL DEFAULT '',
+                    ho_id TEXT NOT NULL DEFAULT '',
+                    ctx_id TEXT NOT NULL DEFAULT '',
+                    note TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

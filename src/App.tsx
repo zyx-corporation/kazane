@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType } from './types';
+import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
 import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData, agentProfilesData } from './data/seed';
-import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents } from './db';
+import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { WorkItemDrawer } from './components/WorkItemDrawer';
@@ -82,6 +82,7 @@ export default function App() {
   const [items, setItems] = useState<WorkItem[]>(loadItemsFromStorage() ?? seedItems);
   const [contexts, setContexts] = useState<ContextCard[]>(seedContexts);
   const [handoffs, setHandoffs] = useState(seedHandoffs);
+  const [evidenceLog, setEvidenceLog] = useState<EvidenceLogEntry[]>([]);
   const [dbReady, setDbReady] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
   const [tab, setTab] = useState<DrawerTab>('context');
@@ -127,7 +128,7 @@ export default function App() {
   useEffect(() => {
     if (!IS_TAURI) return;
     let cancelled = false;
-    Promise.all([dbListItems(), dbListContextCards(), dbListHandoffs()]).then(([rows, ctxRows, hoRows]) => {
+    Promise.all([dbListItems(), dbListContextCards(), dbListHandoffs(), dbListEvidenceLog()]).then(([rows, ctxRows, hoRows, evRows]) => {
       if (cancelled) return;
       if (rows.length > 0) {
         setItems(rows);
@@ -143,6 +144,18 @@ export default function App() {
         setHandoffs(hoRows);
       } else {
         Promise.all(seedHandoffs.map(ho => dbUpsertHandoff(ho)));
+      }
+      if (evRows.length > 0) {
+        setEvidenceLog(evRows);
+      } else {
+        const seedEv = rdeEvidenceData.map((e, i) => ({
+          id: `EV-SEED-${String(i + 1).padStart(3, '0')}`,
+          type: e.type, label: e.label, trust: e.trust as EvidenceLogEntry['trust'],
+          store: e.store, wiId: '', hoId: '', ctxId: '', note: '',
+          createdAt: new Date().toISOString(),
+        }));
+        setEvidenceLog(seedEv);
+        Promise.all(seedEv.map(ev => dbAddEvidenceEntry(ev)));
       }
       setDbReady(true);
     }).catch(() => { if (!cancelled) setDbReady(false); });
@@ -422,6 +435,17 @@ export default function App() {
     setScreen('context');
   }
 
+  function addEvidence(ev: { type: string; label: string; trust: EvidenceLogEntry['trust']; store: string }) {
+    const entry: EvidenceLogEntry = {
+      id: 'EV-' + Date.now().toString(36).toUpperCase(),
+      type: ev.type, label: ev.label, trust: ev.trust, store: ev.store,
+      wiId: '', hoId: '', ctxId: '', note: '',
+      createdAt: new Date().toISOString(),
+    };
+    setEvidenceLog(prev => [entry, ...prev]);
+    if (IS_TAURI && dbReady) dbAddEvidenceEntry(entry).catch(() => {});
+  }
+
   function exportItems() {
     const ts = new Date().toISOString().slice(0, 10);
     downloadJson({ exportedAt: new Date().toISOString(), workItems: items, contextCards: contexts }, `kazane-export-${ts}.json`);
@@ -525,10 +549,11 @@ export default function App() {
             <EscalationGate gateRules={gateRulesData} agentProfiles={agentProfilesData} gateDomain={gateDomain} t={t} items={enriched} onSetGateDomain={setGateDomain} />
           )}
           {screen === 'rde' && (
-            <RdeEvidenceAudit rdeEvidence={rdeEvidenceData} t={t}
+            <RdeEvidenceAudit evidenceLog={evidenceLog} t={t}
               onPromoteRde={() => promoteUnresolved('業務領域別テンプレート', '調査', 'CTX-002')}
               onGoCtx={() => nav('context')}
               onExport={exportItems}
+              onAddEvidence={addEvidence}
             />
           )}
         </div>

@@ -143,6 +143,19 @@ export interface RdeEvidence {
   store: string;
 }
 
+export interface EvidenceLogEntry {
+  id: string;
+  type: string;
+  label: string;
+  trust: TrustLevel;
+  store: string;
+  wiId: string;
+  hoId: string;
+  ctxId: string;
+  note: string;
+  createdAt: string;
+}
+
 export const DOMAIN_COLORS: Record<string, string> = {
   '開発': '#5b8def',
   '営業': '#3fb6a8',
