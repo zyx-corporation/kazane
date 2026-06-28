@@ -244,12 +244,7 @@ pub fn run() {
                 .add_migrations("sqlite:kazane.db", migrations())
                 .build(),
         )
-        .setup(|app| {
-            #[cfg(debug_assertions)]
-            {
-                let window = app.get_webview_window("main").unwrap();
-                window.open_devtools();
-            }
+        .setup(|_app| {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
