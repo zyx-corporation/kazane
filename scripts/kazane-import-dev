@@ -1,0 +1,813 @@
+#!/usr/bin/env python3
+"""
+kazane-import-dev
+Injects the full Kazane development task state into the local SQLite DB.
+Run with the app CLOSED to avoid write conflicts.
+
+Usage:
+  scripts/kazane-import-dev          # import into default DB path
+  scripts/kazane-import-dev --dry-run  # show counts without writing
+"""
+
+import sqlite3, json, os, sys
+from datetime import datetime, timezone
+
+DB_PATH = os.path.expanduser(
+    "~/Library/Application Support/jp.zyxcorp.kazane/kazane.db"
+)
+NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+DRY = "--dry-run" in sys.argv
+
+
+def j(obj):
+    return json.dumps(obj, ensure_ascii=False)
+
+
+# ─────────────────────────────────────────────
+# Context Cards
+# ─────────────────────────────────────────────
+CTX_CARDS = [
+    {
+        "id": "CTX-001",
+        "title": "Kazane Core Definition",
+        "question": "KazaneをAI時代の業務OSとして定義するには何が必要か。開発管理ツールに閉じず、人間とAIの協働業務フロー全体を扱う上位概念にするには。",
+        "purpose": "AI番頭・Chronicle Stack・RDE・Handoff・Evidence・Gate を接続する製品概念を確立する。",
+        "context": "ZYX社内では開発以外（営業・顧客対応・経理・執筆・診断士連携）でもAI協働が進行。Kazane自身をKazaneで管理するdogfooding実証が進行中。",
+        "constraint_text": "MVPを膨らませすぎない。定義は広く、実装は狭く。外部約束はTomoyukiが判断。",
+        "past": "当初は開発Issue管理として着想。ADR-0003によりContext Cardが一級市民に。ADR-0012によりTauri-firstに転換。v0.0〜v0.3完了・PR #12マージ済み（2026-06-28）。",
+        "related_wi_json": j(["WI-D00", "WI-D01", "WI-D02", "WI-D03"]),
+        "related_ev_json": j(["EV-DEV-001", "EV-DEV-007"]),
+        "unresolved_json": j(["業務領域別テンプレートの優先順位", "権限設計の粒度", "証跡保存期間ポリシー", "Linux build確認"]),
+        "next_policy": "v0.4 michiでGitHub連携・CLI/MCP・開発ワークフロー証明。v0.5 ayumiで社内全業務に拡張。",
+        "created_at": "2026-06-26T09:00:00",
+    },
+    {
+        "id": "CTX-002",
+        "title": "Kazane開発管理 — KazaneをKazaneで管理する",
+        "question": "Kazane自身の開発・設計・判断をKazaneで管理し、文脈と証跡を残すにはどうするか。",
+        "purpose": "「KazaneをKazaneで管理する」dogfooding実証。v0.0〜v1.0の開発ログをKazaneに残し、製品自身が自己証明できる状態にする。",
+        "context": "Claude Code + Tomoyuki Kanoが共同実施。ブランチ管理はGitHub / zyx-corporation/kazane。PR #12がv0.0〜v0.3をmainにマージ済み（2026-06-28）。",
+        "constraint_text": "マージ・本番反映はTomoyukiが判断。Claude Codeは実装・PR・記録までが権限範囲。",
+        "past": "v0.0〜v0.3: PR #12完了・mainマージ済み（2026-06-28）。DevTools自動起動無効化。シードデータを空白スタートに変更。",
+        "related_wi_json": j(["WI-D00", "WI-D01", "WI-D02", "WI-D03", "WI-401", "WI-402"]),
+        "related_ev_json": j(["EV-DEV-001", "EV-DEV-002", "EV-DEV-003", "EV-DEV-004"]),
+        "unresolved_json": j(["v0.4 michi スコープ着手", "Linux build確認", "cargo tauri build DMG生成"]),
+        "next_policy": "v0.4 michi開始。GitHub Issue/PR連携とCLI/MCPプロトタイプを優先。",
+        "created_at": "2026-06-27T09:00:00",
+    },
+    {
+        "id": "CTX-ADR003",
+        "title": "ADR-0003: Context Cardを一級市民とする",
+        "question": "Kazaneが汎用タスクボードに堕ちないために、なぜContext Cardを一級モデルにする必要があるか。",
+        "purpose": "仕事の起源・価値・制約を耐久性のある文脈として管理し、AIの出力品質と人間の説明責任を向上させる。",
+        "context": "Accepted（2026-06-26）。仕事の背景を一級状態として扱うことでprovenanceと品質を確保する方針。",
+        "constraint_text": "Context Cardはオプションのメモではなく必須の構造。ユーザーが官僚的負担と感じさせない設計が必要。",
+        "past": "v0.1 shirushiでContext Card CRUD実装。v0.3 tsuzuriでHandoffからのContext更新提案機能実装。",
+        "related_wi_json": j(["WI-D01", "WI-D02"]),
+        "related_ev_json": j(["EV-DEV-005"]),
+        "unresolved_json": j(["Context Cardの最小スキーマ定義", "コンテキスト粒度の基準"]),
+        "next_policy": "v0.4でGitHub Issueに紐付けたContext Cardの活用パターンを検証。",
+        "created_at": "2026-06-26T10:00:00",
+    },
+    {
+        "id": "CTX-ADR004",
+        "title": "ADR-0004: エージェント組織モデル",
+        "question": "複数のAIエージェントを役割・権限・レビューチェーンを持つ組織として管理するにはどうするか。",
+        "purpose": "非公式なプロンプト運用をAgent Profile・Manual・Permission・Review Chainとして組織データ化する。",
+        "context": "Proposed（2026-06-26）。v0.3 tsuzuriでAgentProfile最小モデル（5エージェント）を実装済み。EscalationGate画面にAgent Profileパネル追加。",
+        "constraint_text": "「AIを従業員として扱う」メタファーが強くなりすぎないよう責任境界を明示すること。",
+        "past": "v0.3でAgentProfile型・agentProfilesDataシード実装。v0.4でTech Lead/QA/Reviewer/RDEロール定義へ拡張予定。",
+        "related_wi_json": j(["WI-D03", "WI-ADR04", "WI-403"]),
+        "related_ev_json": j(["EV-DEV-005"]),
+        "unresolved_json": j(["Agent Profile v0.1スキーマ確定", "モデルルーティングの設計", "レビューチェーンの実装"]),
+        "next_policy": "v0.4 michiでTech Lead/QA/Reviewer/RDEエージェントロールを定義・実装。",
+        "created_at": "2026-06-26T10:00:00",
+    },
+    {
+        "id": "CTX-ADR012",
+        "title": "ADR-0012: Tauri-firstランタイム（iOS将来視野）",
+        "question": "なぜブラウザファーストではなくTauriをプロトタイプ段階から採用するのか。",
+        "purpose": "ローカルファースト・macOS/Linux対応・iOS将来視野をv0.0から設計に組み込む。",
+        "context": "Accepted（2026-06-26）。旧Web UI Firstを撤回し、Tauri v2をランタイムとして採択。macOS動作確認済み。",
+        "constraint_text": "Tauri固有の前提をKazaneコア概念に漏洩させない。iOSはv0.0から視野に入れるが実装しない。",
+        "past": "v0.0 kiriでTauri v2スキャフォールド構築。tauri-plugin-sql/SQLite採用。macOS動作確認。DevTools自動起動無効化（2026-06-28）。",
+        "related_wi_json": j(["WI-D00", "WI-D01", "WI-D02", "WI-D03"]),
+        "related_ev_json": j(["EV-DEV-001", "EV-DEV-004"]),
+        "unresolved_json": j(["フロントエンドフレームワーク将来評価", "iOS機能深度の検討", "Linux build検証"]),
+        "next_policy": "v0.4でcargo tauri buildによるDMG生成を確認。Linux buildパスを検証。",
+        "created_at": "2026-06-26T10:00:00",
+    },
+    {
+        "id": "CTX-ADR013",
+        "title": "ADR-0013: コントロールプレーンと権限境界",
+        "question": "AIエージェントが広範なリソースアクセスを持たないよう、Kazaneランタイムをどう分離するか。",
+        "purpose": "kazaned（制御）・kazane-privd（権限）・kazane-agentd（実行）の3プロセス分離でAIの権限範囲を明示・制御する。",
+        "context": "Proposed（2026-06-26）。現在のプロトタイプは単一Tauriプロセス。Phase A実装で境界を設計・検証する。",
+        "constraint_text": "初期実装でもアーキテクチャ分離を維持すること。モック境界が恒久化しないよう設計検証が必要。",
+        "past": "v0.0〜v0.3: 単一Tauriプロセスで全操作を実装。IPCメカニズムは未定義。ADR-0013はProposed状態。",
+        "related_wi_json": j(["WI-ADR13"]),
+        "related_ev_json": j(["EV-DEV-005"]),
+        "unresolved_json": j(["IPCメカニズム選定", "ポリシーエンジン設計", "コマンドプロファイル定義", "プロセス監視機構"]),
+        "next_policy": "v0.4でCLI/MCP設計（WI-402）と合わせてPhase A IPCの方向性を検討。",
+        "created_at": "2026-06-26T10:00:00",
+    },
+    {
+        "id": "CTX-ADR014",
+        "title": "ADR-0014: リモートGUIと外部認証",
+        "question": "ローカルTauri GUIに加え、リモートからモニタリング・レビュー・承認操作を安全に提供するにはどうするか。",
+        "purpose": "Access Gateway + Auth Broker経由でスコープ付きリモートアクセスを実現し、クラウドファースト化を避ける。",
+        "context": "Proposed（2026-06-26）。Local GUI（オーナー）+ Remote GUI（スコープ付き）の2モード。OIDC/WebAuthn/MFA想定。v0.9で本実装予定。",
+        "constraint_text": "リモートGUIはkazaned/kazane-privdをバイパスしてはならない。クラウドファースト化を回避すること。",
+        "past": "設計段階。v0.0〜v0.3ではローカルGUIのみ実装。ADR-0014はProposed状態。",
+        "related_wi_json": j(["WI-ADR14"]),
+        "related_ev_json": j(["EV-DEV-005"]),
+        "unresolved_json": j(["IdP選定（Auth0/Keycloak/自前）", "セッションモデル", "リレートポロジー", "オフライン動作"]),
+        "next_policy": "v0.9 utsuwaで本実装。それまではアーキテクチャ要件として保持。",
+        "created_at": "2026-06-26T10:00:00",
+    },
+    {
+        "id": "CTX-V04",
+        "title": "v0.4 michi/道 — 開発ワークフロー証明",
+        "question": "KazaneはGitHub連携・CLI/MCPを通じて自身の開発フローを管理できることを証明できるか。",
+        "purpose": "v0.4のexit criteria：GitHub連携エビデンスを通じてKazaneが自身の開発フローを管理できることを示す。",
+        "context": "v0.3 tsuzuri完了後の次フェーズ。Kazaneを開発専用ツールと見られないよう、開発以外のユースケースも並行維持。",
+        "constraint_text": "開発ユースケースの証明が製品ポジションを「開発ツール」に固定化しないよう注意。",
+        "past": "v0.3完了・PR #12マージ（2026-06-28）。v0.4スコープ定義中。",
+        "related_wi_json": j(["WI-401", "WI-402", "WI-403", "WI-404", "WI-405"]),
+        "related_ev_json": j([]),
+        "unresolved_json": j(["GitHub Issue/PR連携のUI設計", "MCP vs CLI選択基準", "テスト結果エビデンスのスキーマ", "開発エスカレーション条件の定義"]),
+        "next_policy": "WI-401（GitHub連携）とWI-402（CLI/MCP）を優先着手。",
+        "created_at": "2026-06-28T06:00:00",
+    },
+]
+
+# ─────────────────────────────────────────────
+# Work Items
+# ─────────────────────────────────────────────
+COL_STATUS = {
+    "inbox": "Inbox", "ai": "AI Working", "human": "Needs Human",
+    "gate": "Expert / Gate", "done": "Done / Logged",
+}
+
+def wi_row(id, title, domain, assignee, col, risk, ctx_id, next_action, gate,
+           rde, morning, bounced, gate_perm, gate_stops, ctx, ho, ev,
+           rde_audit=None, created_at=NOW):
+    return (
+        id, title, domain, assignee, col, COL_STATUS[col], risk, ctx_id,
+        next_action, gate,
+        1 if rde else 0, 1 if morning else 0, 1 if bounced else 0,
+        gate_perm, gate_stops,
+        j(ctx), j(ho), j(ev),
+        j(rde_audit) if rde_audit else None,
+        None, 0, "", created_at, created_at,
+    )
+
+WORK_ITEMS = [
+    # ── v0.0 kiri ── Done
+    wi_row(
+        "WI-D00", "v0.0 kiri/霧 — Tauriスキャフォールド＋六画面プロトタイプ",
+        "開発", "Claude Code", "done", "中", "CTX-001",
+        "完了・記録済", "本番反映・破壊的変更はTomoyukiが判断",
+        True, False, False,
+        "Tauri scaffold・six-screen prototype・i18n・AI mock・icon生成",
+        "本番反映／破壊的変更／公開API変更",
+        ctx={
+            "question": "Tauri v2上でKazaneの六画面コンセプトを動かし、製品方向性を確認できるか。",
+            "purpose": "製品コンセプトをTauri内で動作するプロトタイプとして具現化する。",
+            "constraint": "macOSで動作確認できること。公開・本番反映はTomoyukiが判断。",
+            "unresolved": "Linuxビルドパスの確認。",
+        },
+        ho={
+            "did": "Tauri v2スキャフォールド構築。Flow Dashboard・Work Board・Context Cards・Handoff Notes・Escalation Gate・RDE/Evidence Auditの六画面を実装。i18n ja/en/zh、AI mock run（1.4s delay）、localStorage fallback、アプリアイコン全サイズ生成。",
+            "judged": "macOSでTauriプロセスが起動することを確認。製品方向性・六画面構成・ADR初期セットの妥当性を確認。v0.0 exit criteriaを満たすと判断。",
+            "couldnt": "Linuxビルド確認。iOS制約の検証。",
+            "uncertain": "Linuxビルドパスが未検証。",
+            "bounce": "なし。v0.0 exit criteriaを満たし完了。",
+            "next": "v0.1 shirushi: SQLite永続化・WorkItem CRUD・Context Card CRUDに着手。",
+            "updCtx": "CTX-001 past に v0.0 完了を記録。",
+            "ev": ["macOS Tauri 起動確認", "six-screen prototype 動作確認", "app icon生成ログ"],
+        },
+        ev=[
+            {"type": "GitHub", "label": "PR #12 feat/v0.0-v0.3", "trust": "高"},
+            {"type": "ファイル", "label": "Tauri起動ログ（macOS）", "trust": "高"},
+        ],
+        rde_audit={
+            "kept": "六画面コンセプトと製品方向性（業務OSとしてのKazane）を維持。",
+            "transformed": "Web UIファーストからTauri-firstへ転換（ADR-0012）。",
+            "unresolved": "Linuxビルド、iOSタイムライン。",
+        },
+        created_at="2026-06-26T12:00:00",
+    ),
+
+    # ── v0.1 shirushi ── Done
+    wi_row(
+        "WI-D01", "v0.1 shirushi/記し — SQLite MVP・WorkItem/Context Card CRUD",
+        "開発", "Claude Code", "done", "中", "CTX-001",
+        "完了・記録済", "本番反映・マージはTomoyukiが判断",
+        True, False, False,
+        "実装・テスト・PR下書き",
+        "本番反映／マージ／破壊的変更",
+        ctx={
+            "question": "tauri-plugin-sqlを使ってWorkItem・Context CardをSQLiteに永続化し、Work Itemの起源を後から読めるようにできるか。",
+            "purpose": "ローカルSQLiteによる永続化で、仕事の起源・文脈を記録・再読できるMVPを実現する。",
+            "constraint": "DBマイグレーションは後方互換を保つ。マージはTomoyukiが判断。",
+            "unresolved": "macOS以外のビルド確認。",
+        },
+        ho={
+            "did": "tauri-plugin-sql（SQLite）: work_items + context_cards テーブル + migration v1。WorkItem CRUD（インライン編集・削除）、Context Card CRUD（作成モーダル・検索）、HandoffNote自動生成、WorkBoardクイック移動+検索、キーボードショートカット（Esc/n/b/d）、JSONエクスポート、アプリアイコン全サイズ生成。",
+            "judged": "v0.1 exit criteria満たす：WorkItem/Context Card記録・仕事の起源が後から読める状態を確認。tsc --noEmit / vite build / cargo check 全パス。",
+            "couldnt": "Linux・iOS確認。",
+            "uncertain": "なし。",
+            "bounce": "なし。v0.1 exit criteriaを満たし完了。",
+            "next": "v0.2 nagare: エージェントキュー・Handoff提出・Needs Human statusに着手。",
+            "updCtx": "CTX-001 past に v0.1 完了を記録。CTX-002 作成。",
+            "ev": ["tsc --noEmit 0 errors", "vite build 成功", "cargo check 成功"],
+        },
+        ev=[
+            {"type": "GitHub", "label": "PR #12 feat/v0.0-v0.3", "trust": "高"},
+            {"type": "ファイル", "label": "tsc --noEmit パスログ", "trust": "高"},
+        ],
+        rde_audit={
+            "kept": "ローカルファースト・SQLite永続化・WorkItem/Context Card中心の設計を維持。",
+            "transformed": "seedデータからDB永続化へ移行。",
+            "unresolved": "Linux/iOSビルド確認。",
+        },
+        created_at="2026-06-26T18:00:00",
+    ),
+
+    # ── v0.2 nagare ── Done
+    wi_row(
+        "WI-D02", "v0.2 nagare/流れ — エージェントキュー・CLIスクリプト・Handoff提出",
+        "開発", "Claude Code", "done", "中", "CTX-002",
+        "完了・記録済", "本番反映・マージはTomoyukiが判断",
+        True, False, False,
+        "実装・テスト・PR下書き",
+        "本番反映／マージ／破壊的変更",
+        ctx={
+            "question": "AIエージェントがWork Itemを引き受け、HandoffNoteを提出し、必要に応じてエスカレーションできる最小フローを実現できるか。",
+            "purpose": "ファイルベースのエージェントキューとTauriコマンドブリッジで、エージェントと人間の業務フローを接続する。",
+            "constraint": "エージェントのファイルアクセスはAppDataに限定。マージはTomoyukiが判断。",
+            "unresolved": "ブラウザ環境でのfallback動作確認。",
+        },
+        ho={
+            "did": "ファイルベースエージェントキュー（{AppData}/tasks/・handoffs/）。Tauriコマンド4つ追加。WIドロワーに「エージェントに割り当てる」ボタン追加。10s polling loop（useCallback + functional updater）。エスカレーションフロー（--escalate）。scripts/kazane-agent CLI（list/pickup/submit/autoサブコマンド）。SQLite migration v2追加。i18n更新（ja/en/zh）。",
+            "judged": "v0.2 exit criteria満たす：エージェントによるWI引き受け・Handoff提出・エスカレーション動作を確認。KazaneでKazane開発を管理するdogfoodingを実証。",
+            "couldnt": "Linux確認。本番ビルド（cargo tauri build）検証。ブラウザfallback確認。",
+            "uncertain": "ブラウザ環境でのagentキューfallback動作が未確認。",
+            "bounce": "なし。v0.2 exit criteriaを満たし完了。",
+            "next": "v0.3 tsuzuri: HandoffNote永続化・Work Timeline・Evidence Logに着手。",
+            "updCtx": "CTX-002 past に v0.2 完了を記録。",
+            "ev": ["tsc --noEmit 0 errors", "vite build 成功", "cargo check 成功", "kazane-agent CLI動作確認"],
+        },
+        ev=[
+            {"type": "GitHub", "label": "PR #12 feat/v0.0-v0.3", "trust": "高"},
+            {"type": "ファイル", "label": "kazane-agent CLI実行ログ", "trust": "高"},
+        ],
+        rde_audit={
+            "kept": "ファイルベースキューとTauriコマンドブリッジの設計を維持。",
+            "transformed": "エージェントが能動的にWork Itemを引き受け・Handoffを提出する流れへ。",
+            "unresolved": "ブラウザfallback確認、Linux確認。",
+        },
+        created_at="2026-06-27T14:00:00",
+    ),
+
+    # ── v0.3 tsuzuri ── Done
+    wi_row(
+        "WI-D03", "v0.3 tsuzuri/綴り — Handoff永続化・Work Timeline・Evidence Log",
+        "開発", "Claude Code", "done", "中", "CTX-002",
+        "完了・記録済", "本番反映・マージはTomoyukiが判断",
+        True, False, False,
+        "実装・テスト・PR下書き",
+        "本番反映／マージ／破壊的変更",
+        ctx={
+            "question": "仕事・会話・判断・アウトプットが追跡可能な履歴になるよう、Handoff・Evidence・Context更新・TimelineをSQLiteに紐付けられるか。",
+            "purpose": "Kazane上でのある主要な設計判断を、Context→Work Item→Handoff→Evidence→Context更新として追跡できる状態にする。",
+            "constraint": "マイグレーションは順次・非破壊。マージはTomoyukiが判断。",
+            "unresolved": "Context Card ↔ Work Item のUIライブリンク。",
+        },
+        ho={
+            "did": "HandoffNote SQLite永続化（migration v3）。Work Timeline（migration v4: events テーブル + idx_events_wi_id）。Context更新提案（updCtx正規表現マッチ→「CTX-xxx を更新」ボタン）。Agent Profile最小実装（5エージェント）。動的RDE Auditテンプレート生成。Evidence Log（migration v5）インライン追加フォーム付き。シードデータ空白スタート化。DevTools自動起動無効化。PR #12マージ（2026-06-28）。",
+            "judged": "v0.3 exit criteria満たす：主要Kazane設計判断をContext→WI→Handoff→Evidence→Context更新として追跡可能な状態を確認。",
+            "couldnt": "Context Card ↔ WI UIライブリンク。cargo tauri build DMG。Linux確認。",
+            "uncertain": "既存DBとのmigration競合リスク（シードデータ削除前の旧DB）。",
+            "bounce": "なし。v0.3 exit criteriaを満たし完了。PR #12マージ済み（2026-06-28）。",
+            "next": "v0.4 michi: GitHub Issue/PR連携・CLI/MCPプロトタイプ・開発ワークフロー証明。WI-401・WI-402を優先着手。",
+            "updCtx": "CTX-002 past に v0.3 完了・PR #12マージを記録。CTX-V04 を新規作成。",
+            "ev": ["tsc --noEmit 0 errors", "vite build 254KB/81KB gzip", "cargo check 成功", "PR #12マージ確認 (2026-06-28)"],
+        },
+        ev=[
+            {"type": "GitHub", "label": "PR #12 マージ済み (2026-06-28)", "trust": "高"},
+            {"type": "ファイル", "label": "vite build 254KB ログ", "trust": "高"},
+            {"type": "ファイル", "label": "cargo check 成功ログ", "trust": "高"},
+        ],
+        rde_audit={
+            "kept": "Handoff・Evidence・Context更新の設計原則を維持。",
+            "transformed": "個別実装からSQLite永続化・履歴追跡・Timeline表示へ。",
+            "unresolved": "Context Card ↔ WI UIライブリンク、Linux確認、DMG生成。",
+        },
+        created_at="2026-06-28T03:01:57",
+    ),
+
+    # ── v0.4 michi ── Inbox
+    wi_row(
+        "WI-401", "v0.4: GitHub Issue/PR連携 — KazaneでGitHub情報を参照・リンクする",
+        "開発", "Claude Code", "inbox", "中", "CTX-V04",
+        "GitHub連携の設計とTauriコマンド実装", "公開API変更・本番反映はTomoyukiが判断",
+        False, True, False,
+        "設計・実装・テスト・PR下書き",
+        "本番反映／破壊的変更／公開API変更",
+        ctx={
+            "question": "KazaneのWork ItemにGitHub Issue/PR番号をリンクし、エビデンスとして参照できるようにするにはどうするか。",
+            "purpose": "GitHub連携エビデンスを通じてKazaneが自身の開発フローを管理できることを証明する（v0.4 exit criteria）。",
+            "constraint": "GitHub APIアクセスはスコープを限定。認証情報はkazane-privd経由が理想。",
+            "unresolved": "GitHub OAuth設計。Issue/PRデータのローカルキャッシュ戦略。UIでの表示粒度。",
+        },
+        ho={
+            "did": "未着手。",
+            "uncertain": "GitHub APIのスコープ設計、認証方式。",
+            "bounce": "—",
+            "next": "CTX-V04を確認しアプローチを設計する。Tauri側のHTTPコマンド実装から着手。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-402", "v0.4: CLI/MCPプロトタイプ — エージェントツール基盤",
+        "開発", "Claude Code", "inbox", "中", "CTX-V04",
+        "CLIまたはMCPサーバーの設計と最小実装", "外部公開・本番反映はTomoyukiが判断",
+        False, False, False,
+        "設計・実装・プロトタイプ",
+        "外部公開／本番反映／セキュリティ影響",
+        ctx={
+            "question": "kazane-agentをMCPサーバー化またはCLI強化することで、AI開発ツールとの統合基盤を作れるか。",
+            "purpose": "Tech Lead/QA/Reviewer/RDEエージェントが開発ワークフローを自律的に進められる基盤を実証する。",
+            "constraint": "ツール権限はADR-0013の境界を尊重。外部公開はTomoyukiが判断。",
+            "unresolved": "MCP vs CLIの選択基準。ツール呼び出しの権限スコープ。",
+        },
+        ho={
+            "did": "未着手。",
+            "uncertain": "MCPプロトコルとTauriコマンドブリッジの統合方式。",
+            "bounce": "—",
+            "next": "ADR-0013のコントロールプレーン分離設計と合わせて検討。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-403", "v0.4: 開発エージェントロール定義 — Tech Lead/QA/Reviewer/RDE",
+        "開発", "Tomoyuki Kano", "inbox", "中", "CTX-ADR004",
+        "エージェントロール定義と権限マトリクス作成", "ロール設計はTomoyukiが最終判断",
+        False, False, False,
+        "ロール設計・権限定義・ドキュメント",
+        "権限付与の最終決定／外部公開",
+        ctx={
+            "question": "Kazane開発フローにTech Lead・QA・Reviewer・RDEという開発特化エージェントロールを定義するにはどうするか。",
+            "purpose": "v0.4の開発ワークフロー証明にあたり、役割・権限・Gate条件を明文化する。",
+            "constraint": "ロールが実態に合わない形式的なものにならないよう注意。",
+            "unresolved": "各ロールの具体的権限スコープ。Reviewerの承認フロー設計。",
+        },
+        ho={
+            "did": "未着手。",
+            "uncertain": "各ロールの責任境界の粒度。",
+            "bounce": "—",
+            "next": "ADR-0004とAgent Profileモデルをベースにロール定義を作成。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-404", "v0.4: テスト結果エビデンススキーマ設計",
+        "開発", "Claude Code", "inbox", "低", "CTX-V04",
+        "テスト結果エビデンスのスキーマ定義と実装", "本番反映はTomoyukiが判断",
+        False, False, False,
+        "スキーマ設計・実装",
+        "本番反映／外部公開",
+        ctx={
+            "question": "tsc/vite/cargo等のCIテスト結果をKazane Evidence Logに自動記録するスキーマとフローをどう設計するか。",
+            "purpose": "開発ワークフローのエビデンス（テスト通過・失敗）をKazaneで管理・追跡可能にする。",
+            "constraint": "CIツールへの依存を最小化。ローカル実行でも機能すること。",
+            "unresolved": "CI連携の範囲（GitHub Actions対応かローカル完結か）。",
+        },
+        ho={
+            "did": "未着手。",
+            "uncertain": "CI連携の優先度とスコープ。",
+            "bounce": "—",
+            "next": "WI-401のGitHub連携設計と並行して検討。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-405", "v0.4: 開発エスカレーション設計 — dev固有のGate条件",
+        "開発", "Tomoyuki Kano", "inbox", "中", "CTX-V04",
+        "開発ドメイン固有のEscalation Gate条件を定義", "Gate設計はTomoyukiが判断",
+        False, False, False,
+        "Gate設計・条件定義",
+        "Gate条件の最終決定",
+        ctx={
+            "question": "開発ドメイン特有のエスカレーション条件（PR review要求・セキュリティ影響・破壊的変更）をKazaneに定義するにはどうするか。",
+            "purpose": "開発ワークフローでのAIの停止・エスカレーションポイントを明示し、人間の判断責任を保つ。",
+            "constraint": "既存のGateRulesデータ構造を活用する。",
+            "unresolved": "セキュリティ影響の判定基準。",
+        },
+        ho={
+            "did": "未着手。",
+            "uncertain": "セキュリティ影響の定義範囲。",
+            "bounce": "—",
+            "next": "WI-403のロール定義と合わせて設計する。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    # ── ADR実装タスク ──
+    wi_row(
+        "WI-ADR04", "ADR-0004: Agent Profile v0.1スキーマ確定・v0.4ロール拡張",
+        "開発", "Claude Code", "inbox", "中", "CTX-ADR004",
+        "Agent Profile v0.1スキーマをコードとドキュメントに反映", "スキーマ確定はTomoyukiが最終判断",
+        False, False, False,
+        "スキーマ設計・実装・ドキュメント",
+        "スキーマ破壊的変更／外部公開",
+        ctx={
+            "question": "ADR-0004のAgent Profile v0.1スキーマ（役割・モデル・権限・レビューチェーン）を実装に落とし込むにはどうするか。",
+            "purpose": "非公式なプロンプト運用を組織データとして管理できる最小モデルを確定する。",
+            "constraint": "「AIを従業員として扱う」メタファーが強くなりすぎないよう責任境界を明示。",
+            "unresolved": "モデルルーティング、レビューチェーンの実装方式。",
+        },
+        ho={
+            "did": "v0.3でAgentProfile型（id/name/model/trustLevel/capabilities/gatePerm/gateStops）とagentProfilesData（5エージェント）を実装済み。EscalationGate画面にAgent Profileパネルを追加。",
+            "uncertain": "モデルルーティング、レビューチェーンの設計。",
+            "bounce": "スキーマの破壊的変更はTomoyukiが判断。",
+            "next": "v0.4 michiのロール定義（WI-403）と合わせてv0.2スキーマに拡張。",
+        },
+        ev=[
+            {"type": "ファイル", "label": "src/types/index.ts AgentProfile定義", "trust": "高"},
+        ],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-ADR13", "ADR-0013: コントロールプレーン分離 Phase Aアーキテクチャ設計",
+        "開発", "Tomoyuki Kano", "inbox", "高", "CTX-ADR013",
+        "Phase A IPCとkazaned/kazane-privd境界を設計", "アーキテクチャ変更はTomoyukiが判断",
+        False, False, False,
+        "アーキテクチャ設計・ドキュメント",
+        "本番反映／プロセス分離の実装判断",
+        ctx={
+            "question": "現在の単一Tauriプロセスをkazaned・kazane-privd・kazane-agentdに分離するPhase A設計をどう進めるか。",
+            "purpose": "AIエージェントが広範なリソースアクセスを持たないよう、権限境界を設計段階から明示する。",
+            "constraint": "モック境界が恒久化しないよう設計検証が必要。初期実装でもアーキテクチャ分離を意識すること。",
+            "unresolved": "IPCメカニズム（Unix socket/gRPC/カスタム）、ポリシーエンジン設計、プロセス監視機構。",
+        },
+        ho={
+            "did": "未着手。v0.0〜v0.3は単一プロセスで全操作を実装。ADR-0013はProposed状態。",
+            "uncertain": "IPCメカニズムの選定。プロセス監視の実装コスト。",
+            "bounce": "アーキテクチャ変更はTomoyukiが最終判断。",
+            "next": "v0.4 michiでCLI/MCP設計（WI-402）と合わせてPhase A IPCの方向性を検討。",
+        },
+        ev=[
+            {"type": "ファイル", "label": "docs/adr/0013-control-plane-and-privilege-boundary.md", "trust": "高"},
+        ],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-ADR14", "ADR-0014: リモートGUI要件詳細化（v0.9に向けて）",
+        "開発", "Tomoyuki Kano", "inbox", "低", "CTX-ADR014",
+        "v0.9までの要件として保持・詳細化", "リモートGUI設計はTomoyukiが判断",
+        False, False, False,
+        "要件定義・アーキテクチャ検討",
+        "外部公開／IdP選定の最終決定",
+        ctx={
+            "question": "v0.9 utsuwaに向けて、リモートGUI（Access Gateway + Auth Broker + OIDC）の要件をどう詳細化するか。",
+            "purpose": "クラウドファースト化を避けつつ、リモートモニタリング・承認操作を安全に提供する設計要件を固める。",
+            "constraint": "リモートGUIはkazaned/kazane-privdをバイパスしてはならない。v0.9実装まで要件として保持。",
+            "unresolved": "IdP選定（Auth0/Keycloak/自前）、セッションモデル、リレートポロジー、オフライン動作。",
+        },
+        ho={
+            "did": "未着手。ADR-0014はProposed状態。v0.9で本実装予定。",
+            "uncertain": "IdP選定、セッションモデルの詳細。",
+            "bounce": "v0.9実装判断はTomoyukiが行う。",
+            "next": "v0.5〜v0.8の開発を通じて要件を具体化する。現時点は設計保持。",
+        },
+        ev=[
+            {"type": "ファイル", "label": "docs/adr/0014-remote-gui-and-external-auth.md", "trust": "高"},
+        ],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    # ── 将来マイルストーン ──
+    wi_row(
+        "WI-501", "v0.5 ayumi/歩み — 社内業務ベータ計画",
+        "開発", "Tomoyuki Kano", "inbox", "低", "CTX-001",
+        "v0.5スコープ確定とテンプレート設計着手", "スコープ確定はTomoyukiが判断",
+        False, False, False,
+        "スコープ設計・テンプレート設計",
+        "外部公開／顧客データ使用",
+        ctx={
+            "question": "ZYX社内の開発以外の業務（営業・顧客対応・経理・執筆・AI番頭）をKazaneで管理し、dogfoodingを全社的に展開するには何が必要か。",
+            "purpose": "複数業務ドメインのワークフローテンプレートを整備し、Kazaneをドメイン横断の業務OSとして実証する。",
+            "constraint": "v0.4のexit criteriaを満たしてから着手。MVP膨張に注意。",
+            "unresolved": "業務ドメイン別テンプレートの優先順位。停滞検知の実装方式。",
+        },
+        ho={
+            "did": "未着手。v0.4 michi完了後に着手予定。",
+            "uncertain": "各業務ドメインのテンプレート設計コスト。",
+            "bounce": "v0.4完了まで待機。",
+            "next": "v0.4 michi完了後にスコープ確定。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-601", "v0.6 akashi/証し — 正式Evidence Log・RDE Auditフロー",
+        "開発", "Tomoyuki Kano", "inbox", "低", "CTX-001",
+        "v0.6設計・Evidence Log正式化計画", "設計はTomoyukiが判断",
+        False, False, False,
+        "設計・計画",
+        "外部公開",
+        ctx={
+            "question": "AI生成・AI支援の成果物が意味的ドリフトしていないか、元の設計戦略と照合して監査できる正式フローを整備するには。",
+            "purpose": "v0.6の正式Evidence Log・RDE Audit・レビューチェーン・監査フラグを設計する。",
+            "constraint": "v0.5完了後に着手。",
+            "unresolved": "監査要件の最小定義。レビューチェーンのUI設計。",
+        },
+        ho={
+            "did": "未着手。v0.3でEvidence Logの基盤を実装済み。v0.6で正式化。",
+            "uncertain": "監査フローのUX設計。",
+            "bounce": "v0.5完了まで待機。",
+            "next": "v0.5完了後に設計開始。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+
+    wi_row(
+        "WI-701", "v0.7 musubi/結び — AI番頭 メール・カレンダー・顧客Context連携",
+        "開発", "Tomoyuki Kano", "inbox", "低", "CTX-001",
+        "v0.7コンセプト設計", "外部サービス連携はTomoyukiが判断",
+        False, False, False,
+        "コンセプト設計・要件整理",
+        "外部サービス連携／顧客データ処理",
+        ctx={
+            "question": "AI番頭のデモフローをKazaneコンセプトで示し、顧客文脈と業務引き継ぎをリンクするにはどうするか。",
+            "purpose": "メール・カレンダー・会議メモ・顧客Context CardをKazaneに統合し、AI番頭デモを実証する。",
+            "constraint": "顧客データ処理にはプライバシー・信頼の設計が必要。外部連携はTomoyukiが判断。",
+            "unresolved": "メール/カレンダー連携APIの選定。顧客Context Cardのプライバシー設計。",
+        },
+        ho={
+            "did": "未着手。v0.6完了後に着手予定。",
+            "uncertain": "外部サービス連携のスコープと実装コスト。",
+            "bounce": "v0.6完了まで待機。",
+            "next": "v0.6完了後にコンセプト設計開始。",
+        },
+        ev=[],
+        created_at="2026-06-28T09:00:00",
+    ),
+]
+
+# ─────────────────────────────────────────────
+# Handoff Notes（完了版すべて）
+# ─────────────────────────────────────────────
+HANDOFFS = [
+    {
+        "id": "HO-V00",
+        "wi": "WI-D00 v0.0 kiri/霧 — Tauriスキャフォールド＋六画面プロトタイプ",
+        "assignee": "Claude Code", "domain": "開発",
+        "did": "Tauri v2スキャフォールド構築。Flow Dashboard・Work Board・Context Cards・Handoff Notes・Escalation Gate・RDE/Evidence Auditの六画面を実装。i18n ja/en/zh、AI mock run（1.4s delay）、localStorage fallback、アプリアイコン全サイズ生成（32×32〜1024×1024、icns/ico/iOS/Android）。",
+        "judged": "macOSでTauriプロセスが起動することを確認。製品方向性・六画面構成・ADR初期セットの妥当性を確認。v0.0 exit criteriaを満たすと判断。",
+        "couldnt": "Linuxビルド確認。iOS制約の検証。",
+        "uncertain": "Linuxビルドパスが未検証。",
+        "bounce": "なし。v0.0 exit criteriaを満たし完了。",
+        "next": "v0.1 shirushi: SQLite永続化・WorkItem CRUD・Context Card CRUDに着手。",
+        "upd_ctx": "CTX-001 past に v0.0 完了を記録。",
+        "ev_json": j(["macOS Tauri 起動確認", "six-screen prototype 動作確認", "app icon生成ログ"]),
+        "gate": "", "ask": "", "escalated": 0, "escalation_reason": "",
+        "created_at": "2026-06-26T12:00:00",
+    },
+    {
+        "id": "HO-V01",
+        "wi": "WI-D01 v0.1 shirushi/記し — SQLite MVP",
+        "assignee": "Claude Code", "domain": "開発",
+        "did": "tauri-plugin-sql（SQLite）: work_items + context_cards テーブル + migration v1。WorkItem CRUD（インライン編集・削除）、Context Card CRUD（作成モーダル・検索）、HandoffNote自動生成（AI run完了時）、WorkBoardクイック移動+検索、キーボードショートカット（Esc/n/b/d）、JSONエクスポート実装。",
+        "judged": "v0.1 exit criteria満たす：WorkItem/Context Card記録・仕事の起源が後から読める状態を確認。tsc --noEmit / vite build / cargo check 全パス。",
+        "couldnt": "Linux・iOS確認。",
+        "uncertain": "なし。",
+        "bounce": "なし。v0.1 exit criteriaを満たし完了。",
+        "next": "v0.2 nagare: エージェントキュー・Handoff提出・Needs Human statusに着手。",
+        "upd_ctx": "CTX-001 past に v0.1 完了を記録。CTX-002 作成。",
+        "ev_json": j(["tsc --noEmit 0 errors", "vite build 成功", "cargo check 成功"]),
+        "gate": "", "ask": "", "escalated": 0, "escalation_reason": "",
+        "created_at": "2026-06-26T18:00:00",
+    },
+    {
+        "id": "HO-V02",
+        "wi": "WI-D02 v0.2 nagare/流れ — エージェントキュー",
+        "assignee": "Claude Code", "domain": "開発",
+        "did": "ファイルベースエージェントキュー実装（{AppData}/tasks/・handoffs/）。Tauriコマンド4つ追加（write_agent_task / poll_agent_handoffs / read_agent_handoff / get_agent_dirs）。WIドロワーに「エージェントに割り当てる」ボタン。10s polling loop（useCallback + functional updater でstale closure回避）。エスカレーションフロー（--escalate）。scripts/kazane-agent CLI（list/pickup/submit/autoサブコマンド）。SQLite migration v2追加。i18n更新（ja/en/zh）。",
+        "judged": "v0.2 exit criteria満たす：エージェントによるWI引き受け・Handoff提出・エスカレーション動作を確認。KazaneでKazane開発を管理するdogfoodingを実証。",
+        "couldnt": "Linux確認。本番ビルド（cargo tauri build）検証。ブラウザfallback確認。",
+        "uncertain": "ブラウザ環境でのagentキューfallback動作が未確認。",
+        "bounce": "なし。v0.2 exit criteriaを満たし完了。",
+        "next": "v0.3 tsuzuri: HandoffNote永続化・Work Timeline・Evidence Logに着手。",
+        "upd_ctx": "CTX-002 past に v0.2 完了を記録。",
+        "ev_json": j(["tsc --noEmit 0 errors", "vite build 成功", "cargo check 成功", "kazane-agent CLI動作確認"]),
+        "gate": "", "ask": "", "escalated": 0, "escalation_reason": "",
+        "created_at": "2026-06-27T14:00:00",
+    },
+    {
+        "id": "HO-V03",
+        "wi": "WI-D03 v0.3 tsuzuri/綴り — Handoff永続化・Work Timeline・Evidence Log",
+        "assignee": "Claude Code", "domain": "開発",
+        "did": "HandoffNote SQLite永続化（migration v3: handoff_notes テーブル）。Work Timeline（migration v4: events テーブル + idx_events_wi_id）。Context更新提案（updCtx正規表現マッチ→「CTX-xxx を更新」ボタン）。Agent Profile最小実装（5エージェント）。動的RDE Auditテンプレート生成（WI ctx + Handoffから）。Evidence Log（migration v5: evidence_log テーブル）インライン追加フォーム付き。シードデータ空白スタート化。DevTools自動起動無効化。全i18n更新（ja/en/zh）。PR #12マージ済み（2026-06-28）。",
+        "judged": "v0.3 exit criteria満たす：主要Kazane設計判断をContext→WI→Handoff→Evidence→Context更新として追跡可能な状態を確認。",
+        "couldnt": "Context Card ↔ WI UIライブリンク。cargo tauri build DMG。Linux確認。",
+        "uncertain": "既存DBとのmigration競合リスク（シードデータ削除前の旧DB）。",
+        "bounce": "なし。v0.3 exit criteriaを満たし完了。PR #12マージ済み（2026-06-28）。",
+        "next": "v0.4 michi: GitHub Issue/PR連携（WI-401）・CLI/MCPプロトタイプ（WI-402）を優先着手。",
+        "upd_ctx": "CTX-002 past に v0.3 完了・PR #12マージを記録。CTX-V04 を新規作成。",
+        "ev_json": j(["tsc --noEmit 0 errors", "vite build 254KB/81KB gzip", "cargo check 成功", "PR #12マージ確認 (2026-06-28)"]),
+        "gate": "",
+        "ask": "Tomoyuki: v0.4 michi のスコープ優先順位を確認してください。WI-401（GitHub連携）とWI-402（CLI/MCP）を先行提案しています。",
+        "escalated": 0, "escalation_reason": "",
+        "created_at": "2026-06-28T06:00:00",
+    },
+]
+
+# ─────────────────────────────────────────────
+# Evidence Log
+# ─────────────────────────────────────────────
+EVIDENCE = [
+    {
+        "id": "EV-DEV-001", "type": "GitHub",
+        "label": "PR #12 feat: Kazane v0.0–v0.3 prototype — マージ済み (2026-06-28)",
+        "trust": "高", "store": "GitHub / zyx-corporation/kazane",
+        "wi_id": "WI-D03", "ho_id": "HO-V03", "ctx_id": "CTX-002",
+        "note": "v0.0 kiri〜v0.3 tsuzuri の全実装をスカッシュマージ。main ブランチに統合済み。",
+        "created_at": "2026-06-28T03:01:57",
+    },
+    {
+        "id": "EV-DEV-002", "type": "ファイル",
+        "label": "tsc --noEmit 0 errors (v0.3 HEAD ecefe42)",
+        "trust": "高", "store": "ローカル / kazane/",
+        "wi_id": "WI-D03", "ho_id": "HO-V03", "ctx_id": "CTX-002",
+        "note": "TypeScriptコンパイルエラーなし。EvidenceLogEntry・WorkEvent・AgentProfile型を含む全型チェックパス。",
+        "created_at": "2026-06-28T03:00:00",
+    },
+    {
+        "id": "EV-DEV-003", "type": "ファイル",
+        "label": "vite build — 254KB JS / 81KB gzip (v0.3)",
+        "trust": "高", "store": "ローカル / kazane/dist/",
+        "wi_id": "WI-D03", "ho_id": "HO-V03", "ctx_id": "CTX-002",
+        "note": "49 modules transformed。本番ビルド成功。",
+        "created_at": "2026-06-28T03:00:00",
+    },
+    {
+        "id": "EV-DEV-004", "type": "ファイル",
+        "label": "cargo check — 0 errors (lib.rs migration v1-v5)",
+        "trust": "高", "store": "ローカル / kazane/src-tauri/",
+        "wi_id": "WI-D03", "ho_id": "HO-V03", "ctx_id": "CTX-002",
+        "note": "SQLite migration v1〜v5・Tauriコマンド5つ・AgentDirs構造体 全てコンパイル成功。",
+        "created_at": "2026-06-28T03:00:00",
+    },
+    {
+        "id": "EV-DEV-005", "type": "ファイル",
+        "label": "ADR一式 — docs/adr/ 0001〜0014",
+        "trust": "高", "store": "GitHub / kazane/docs/adr/",
+        "wi_id": "WI-D00", "ho_id": "", "ctx_id": "CTX-001",
+        "note": "ADR-0001〜0014。Accepted: 0003/0005/0006/0012。Proposed: 0004/0013/0014。",
+        "created_at": "2026-06-26T10:00:00",
+    },
+    {
+        "id": "EV-DEV-006", "type": "ファイル",
+        "label": "デザインハンドオフ — design_handoff_kazane_work_os",
+        "trust": "高", "store": "iCloud / Downloads/design_handoff_kazane_work_os/",
+        "wi_id": "WI-D00", "ho_id": "", "ctx_id": "CTX-001",
+        "note": "六画面のデザインハンドオフ。v0.0プロトタイプの実装元。",
+        "created_at": "2026-06-26T09:00:00",
+    },
+    {
+        "id": "EV-DEV-007", "type": "ファイル",
+        "label": "Roadmap doc — docs/roadmap.md (v0.0〜v1.0)",
+        "trust": "高", "store": "GitHub / kazane/docs/roadmap.md",
+        "wi_id": "WI-D00", "ho_id": "", "ctx_id": "CTX-001",
+        "note": "v0.0 kiri〜v1.0 kanade の全マイルストーン定義。runtime direction (Tauri-first) を含む。",
+        "created_at": "2026-06-26T10:00:00",
+    },
+]
+
+# ─────────────────────────────────────────────
+# Events（Work Timeline 用）
+# ─────────────────────────────────────────────
+EVENTS = [
+    {"id": "EVT-001", "wi_id": "WI-D00", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.0 kiri開始",                                 "created_at": "2026-06-26T10:00:00"},
+    {"id": "EVT-002", "wi_id": "WI-D00", "event_type": "ai_run",    "from_col": "inbox","to_col": "ai",    "actor": "Claude Code",   "note": "v0.0実装着手",                                  "created_at": "2026-06-26T10:30:00"},
+    {"id": "EVT-003", "wi_id": "WI-D00", "event_type": "rde_run",   "from_col": "",     "to_col": "",      "actor": "Claude Code",   "note": "RDE監査実施",                                   "created_at": "2026-06-26T11:30:00"},
+    {"id": "EVT-004", "wi_id": "WI-D00", "event_type": "moved",     "from_col": "ai",   "to_col": "done",  "actor": "Claude Code",   "note": "v0.0 exit criteria達成・macOS動作確認",          "created_at": "2026-06-26T12:00:00"},
+    {"id": "EVT-005", "wi_id": "WI-D01", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.1 shirushi開始",                              "created_at": "2026-06-26T12:00:00"},
+    {"id": "EVT-006", "wi_id": "WI-D01", "event_type": "ai_run",    "from_col": "inbox","to_col": "ai",    "actor": "Claude Code",   "note": "v0.1実装着手",                                  "created_at": "2026-06-26T12:30:00"},
+    {"id": "EVT-007", "wi_id": "WI-D01", "event_type": "moved",     "from_col": "ai",   "to_col": "done",  "actor": "Claude Code",   "note": "v0.1 exit criteria達成",                        "created_at": "2026-06-26T18:00:00"},
+    {"id": "EVT-008", "wi_id": "WI-D02", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.2 nagare開始",                               "created_at": "2026-06-27T09:00:00"},
+    {"id": "EVT-009", "wi_id": "WI-D02", "event_type": "ai_run",    "from_col": "inbox","to_col": "ai",    "actor": "Claude Code",   "note": "v0.2実装着手",                                  "created_at": "2026-06-27T09:30:00"},
+    {"id": "EVT-010", "wi_id": "WI-D02", "event_type": "moved",     "from_col": "ai",   "to_col": "done",  "actor": "Claude Code",   "note": "v0.2 exit criteria達成・PR #12プッシュ",         "created_at": "2026-06-27T14:00:00"},
+    {"id": "EVT-011", "wi_id": "WI-D03", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.3 tsuzuri開始",                              "created_at": "2026-06-27T18:00:00"},
+    {"id": "EVT-012", "wi_id": "WI-D03", "event_type": "ai_run",    "from_col": "inbox","to_col": "ai",    "actor": "Claude Code",   "note": "v0.3実装着手",                                  "created_at": "2026-06-27T18:30:00"},
+    {"id": "EVT-013", "wi_id": "WI-D03", "event_type": "rde_run",   "from_col": "",     "to_col": "",      "actor": "Claude Code",   "note": "RDE監査実施",                                   "created_at": "2026-06-28T02:00:00"},
+    {"id": "EVT-014", "wi_id": "WI-D03", "event_type": "moved",     "from_col": "ai",   "to_col": "done",  "actor": "Claude Code",   "note": "v0.3 exit criteria達成・PR #12マージ (2026-06-28)", "created_at": "2026-06-28T03:01:57"},
+    {"id": "EVT-015", "wi_id": "WI-401", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.4 michi着手計画",                            "created_at": "2026-06-28T09:00:00"},
+    {"id": "EVT-016", "wi_id": "WI-402", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.4 michi着手計画",                            "created_at": "2026-06-28T09:00:00"},
+    {"id": "EVT-017", "wi_id": "WI-403", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.4 michi着手計画",                            "created_at": "2026-06-28T09:00:00"},
+]
+
+
+def main():
+    if not os.path.exists(os.path.expanduser(DB_PATH)):
+        print(f"DB not found: {DB_PATH}", file=sys.stderr)
+        print("Run 'npm run tauri dev' once to create the DB, then close the app and re-run.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"{'[DRY RUN] ' if DRY else ''}Importing to: {DB_PATH}")
+    print(f"  {len(CTX_CARDS)} Context Cards")
+    print(f"  {len(WORK_ITEMS)} Work Items")
+    print(f"  {len(HANDOFFS)} Handoff Notes")
+    print(f"  {len(EVIDENCE)} Evidence entries")
+    print(f"  {len(EVENTS)} Events")
+
+    if DRY:
+        return
+
+    con = sqlite3.connect(os.path.expanduser(DB_PATH))
+    cur = con.cursor()
+
+    for c in CTX_CARDS:
+        cur.execute("""
+            INSERT OR REPLACE INTO context_cards
+              (id, title, question, purpose, context, constraint_text, past,
+               related_wi_json, related_ev_json, unresolved_json, next_policy,
+               created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            c["id"], c["title"], c["question"], c["purpose"], c["context"],
+            c["constraint_text"], c["past"],
+            c["related_wi_json"], c["related_ev_json"], c["unresolved_json"],
+            c["next_policy"], c["created_at"], NOW,
+        ))
+
+    for row in WORK_ITEMS:
+        cur.execute("""
+            INSERT OR REPLACE INTO work_items
+              (id, title, domain, assignee, col, status, risk, context_id,
+               next_action, gate, rde, morning, bounced, gate_perm, gate_stops,
+               ctx_json, ho_json, ev_json, rde_audit_json,
+               agent_picked_up_at, agent_escalated, escalation_reason,
+               created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, row)
+
+    for h in HANDOFFS:
+        cur.execute("""
+            INSERT OR REPLACE INTO handoff_notes
+              (id, wi, assignee, domain, did, judged, couldnt, uncertain,
+               bounce, next, upd_ctx, ev_json, gate, ask,
+               escalated, escalation_reason, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            h["id"], h["wi"], h["assignee"], h["domain"],
+            h["did"], h["judged"], h["couldnt"], h["uncertain"],
+            h["bounce"], h["next"], h["upd_ctx"], h["ev_json"],
+            h["gate"], h["ask"], h["escalated"], h["escalation_reason"],
+            h["created_at"],
+        ))
+
+    for e in EVIDENCE:
+        cur.execute("""
+            INSERT OR REPLACE INTO evidence_log
+              (id, type, label, trust, store, wi_id, ho_id, ctx_id, note, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (
+            e["id"], e["type"], e["label"], e["trust"], e["store"],
+            e["wi_id"], e["ho_id"], e["ctx_id"], e["note"], e["created_at"],
+        ))
+
+    for e in EVENTS:
+        cur.execute("""
+            INSERT OR IGNORE INTO events
+              (id, wi_id, event_type, from_col, to_col, actor, note, created_at)
+            VALUES (?,?,?,?,?,?,?,?)
+        """, (
+            e["id"], e["wi_id"], e["event_type"], e["from_col"],
+            e["to_col"], e["actor"], e["note"], e["created_at"],
+        ))
+
+    con.commit()
+    con.close()
+    print("Done. Open Kazane to verify.")
+
+
+if __name__ == "__main__":
+    main()
