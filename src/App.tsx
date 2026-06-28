@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry, GateRule, AgentProfile } from './types';
+import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry, GateRule, AgentProfile, GitHubLink } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
 import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry, dbListGateRules, dbListAgentProfiles } from './db';
@@ -416,6 +416,40 @@ export default function App() {
     setScreen('context');
   }
 
+  async function linkGitHub(wiId: string, url: string) {
+    const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)/);
+    if (!match) return;
+    const [, owner, repo, kind, numStr] = match;
+    const link: GitHubLink = {
+      url,
+      type: kind === 'pull' ? 'pr' : 'issue',
+      owner, repo, number: parseInt(numStr, 10),
+    };
+    try {
+      const apiPath = kind === 'pull' ? 'pulls' : 'issues';
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/${apiPath}/${numStr}`, {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+      });
+      if (res.ok) {
+        const data = await res.json() as { title: string; state: string };
+        link.title = data.title;
+        link.state = data.state;
+        link.fetchedAt = new Date().toISOString();
+      }
+    } catch (_) {}
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== wiId) return i;
+      const existing = i.githubLinks ?? [];
+      if (existing.some(l => l.url === url)) return i;
+      changed = { ...i, githubLinks: [...existing, link] };
+      return changed;
+    });
+    if (!changed) return;
+    setItems(updated); persist(updated, changed);
+    flash(`GitHub ${link.type === 'pr' ? 'PR' : 'Issue'} #${link.number} をリンクしました`);
+  }
+
   function addEvidence(ev: { type: string; label: string; trust: EvidenceLogEntry['trust']; store: string }) {
     const entry: EvidenceLogEntry = {
       id: 'EV-' + Date.now().toString(36).toUpperCase(),
@@ -546,6 +580,7 @@ export default function App() {
           onEditItem={editItem}
           onDeleteItem={deleteItem}
           onLoadEvents={id => IS_TAURI && dbReady ? dbListEvents(id) : Promise.resolve([])}
+          onLinkGitHub={linkGitHub}
           onGoCtx={() => { nav('context'); }}
           onGoCtxById={goCtxById}
           onGoHand={() => { nav('handoff'); }}

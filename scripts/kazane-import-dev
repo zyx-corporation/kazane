@@ -151,7 +151,7 @@ COL_STATUS = {
 
 def wi_row(id, title, domain, assignee, col, risk, ctx_id, next_action, gate,
            rde, morning, bounced, gate_perm, gate_stops, ctx, ho, ev,
-           rde_audit=None, created_at=NOW):
+           rde_audit=None, github_links=None, created_at=NOW):
     return (
         id, title, domain, assignee, col, COL_STATUS[col], risk, ctx_id,
         next_action, gate,
@@ -159,7 +159,9 @@ def wi_row(id, title, domain, assignee, col, risk, ctx_id, next_action, gate,
         gate_perm, gate_stops,
         j(ctx), j(ho), j(ev),
         j(rde_audit) if rde_audit else None,
-        None, 0, "", created_at, created_at,
+        None, 0, "",
+        j(github_links) if github_links else "[]",
+        created_at, created_at,
     )
 
 WORK_ITEMS = [
@@ -311,24 +313,29 @@ WORK_ITEMS = [
     # ── v0.4 michi ── Inbox
     wi_row(
         "WI-401", "v0.4: GitHub Issue/PR連携 — KazaneでGitHub情報を参照・リンクする",
-        "開発", "Claude Code", "inbox", "中", "CTX-V04",
-        "GitHub連携の設計とTauriコマンド実装", "公開API変更・本番反映はTomoyukiが判断",
+        "開発", "Claude Code", "ai", "中", "CTX-V04",
+        "PRレビュー・マージ待ち", "公開API変更・本番反映はTomoyukiが判断",
         False, True, False,
         "設計・実装・テスト・PR下書き",
         "本番反映／破壊的変更／公開API変更",
         ctx={
             "question": "KazaneのWork ItemにGitHub Issue/PR番号をリンクし、エビデンスとして参照できるようにするにはどうするか。",
             "purpose": "GitHub連携エビデンスを通じてKazaneが自身の開発フローを管理できることを証明する（v0.4 exit criteria）。",
-            "constraint": "GitHub APIアクセスはスコープを限定。認証情報はkazane-privd経由が理想。",
-            "unresolved": "GitHub OAuth設計。Issue/PRデータのローカルキャッシュ戦略。UIでの表示粒度。",
+            "constraint": "GitHub APIアクセスはwebview fetchで実施（CSP null）。認証なし公開API利用が初期実装。",
+            "unresolved": "GitHub OAuth設計。プライベートリポジトリ対応。",
         },
         ho={
-            "did": "未着手。",
-            "uncertain": "GitHub APIのスコープ設計、認証方式。",
+            "did": "types/index.tsにGitHubLink型追加。SQLite migration v7でgithub_links_jsonカラム追加。db/index.tsのdbUpsertItem/rowToItem更新。App.tsxにlinkGitHub関数実装（fetch API経由）。WorkItemDrawer evidenceタブにGitHubLinksSection追加。",
+            "judged": "WebView fetchでGitHub public API呼び出し可能（CSP null）。URLパース＋API fetch＋状態表示の基本フローを実装。",
+            "couldnt": "GitHub OAuth・プライベートリポジトリ対応は未実装。",
+            "uncertain": "認証ありAPIへの拡張方式。",
             "bounce": "—",
-            "next": "CTX-V04を確認しアプローチを設計する。Tauri側のHTTPコマンド実装から着手。",
+            "next": "PRを作成してTomoyukiにレビュー依頼。",
+            "updCtx": "CTX-V04 のpastにWI-401完了を記録。",
         },
-        ev=[],
+        ev=[
+            {"type": "GitHub", "label": "WI-401 implementation commit", "trust": "高"},
+        ],
         created_at="2026-06-28T09:00:00",
     ),
 
@@ -818,8 +825,8 @@ def main():
                next_action, gate, rde, morning, bounced, gate_perm, gate_stops,
                ctx_json, ho_json, ev_json, rde_audit_json,
                agent_picked_up_at, agent_escalated, escalation_reason,
-               created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               github_links_json, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, row)
 
     for h in HANDOFFS:

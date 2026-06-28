@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile, GitHubLink } from '../types';
 
 let _db: Database | null = null;
 
@@ -25,14 +25,16 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
        (id, title, domain, assignee, col, status, risk, context_id, next_action,
         gate, rde, morning, bounced, gate_perm, gate_stops,
         ctx_json, ho_json, ev_json, rde_audit_json,
-        agent_picked_up_at, agent_escalated, escalation_reason, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,datetime('now'))
+        agent_picked_up_at, agent_escalated, escalation_reason,
+        github_links_json, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        title=$2, domain=$3, assignee=$4, col=$5, status=$6, risk=$7,
        context_id=$8, next_action=$9, gate=$10, rde=$11, morning=$12, bounced=$13,
        gate_perm=$14, gate_stops=$15, ctx_json=$16, ho_json=$17, ev_json=$18,
        rde_audit_json=$19,
        agent_picked_up_at=$20, agent_escalated=$21, escalation_reason=$22,
+       github_links_json=$23,
        updated_at=datetime('now')`,
     [
       item.id, item.title, item.domain, item.assignee, item.col, item.status,
@@ -44,6 +46,7 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
       item.agentPickedUpAt ?? null,
       item.agentEscalated ? 1 : 0,
       item.escalationReason ?? '',
+      JSON.stringify(item.githubLinks ?? []),
     ],
   );
 }
@@ -242,6 +245,7 @@ function rowToItem(r: Record<string, unknown>): WorkItem {
     agentPickedUpAt: r.agent_picked_up_at as string | undefined || undefined,
     agentEscalated: Boolean(r.agent_escalated),
     escalationReason: r.escalation_reason as string | undefined || undefined,
+    githubLinks: r.github_links_json ? (JSON.parse(r.github_links_json as string) as GitHubLink[]) : [],
   };
 }
 

@@ -39,6 +39,17 @@ export interface RdeAudit {
   unresolved: string;
 }
 
+export interface GitHubLink {
+  url: string;
+  type: 'issue' | 'pr';
+  owner: string;
+  repo: string;
+  number: number;
+  title?: string;
+  state?: string;
+  fetchedAt?: string;
+}
+
 export interface WorkItem {
   id: string;
   title: string;
@@ -63,6 +74,8 @@ export interface WorkItem {
   agentPickedUpAt?: string;
   agentEscalated?: boolean;
   escalationReason?: string;
+  // v0.4: GitHub linkage
+  githubLinks?: GitHubLink[];
 }
 
 export interface EnrichedWorkItem extends WorkItem {

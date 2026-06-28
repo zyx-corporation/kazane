@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { EnrichedWorkItem, DrawerTab, BoardCol, WorkItem, WorkEvent } from '../types';
+import type { EnrichedWorkItem, DrawerTab, BoardCol, WorkItem, WorkEvent, GitHubLink } from '../types';
 import { trustColor, isAiActor, DOMAIN_COLORS, AI_ACTORS } from '../types';
 import type { Translations } from '../i18n';
 
@@ -49,6 +49,7 @@ interface WorkItemDrawerProps {
   onEditItem: (id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string }) => void;
   onDeleteItem: (id: string) => void;
   onLoadEvents: (wiId: string) => Promise<WorkEvent[]>;
+  onLinkGitHub: (wiId: string, url: string) => void;
   onGoCtx: () => void;
   onGoCtxById: (id: string) => void;
   onGoHand: () => void;
@@ -56,10 +57,11 @@ interface WorkItemDrawerProps {
   onGoGate: () => void;
 }
 
-export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
   const [events, setEvents] = useState<WorkEvent[]>([]);
+  const [ghInput, setGhInput] = useState('');
 
   useEffect(() => {
     if (tab === 'timeline') {
@@ -213,6 +215,12 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
                   <span style={{ fontSize: 9.5, color: e.trustColor, whiteSpace: 'nowrap' }}>{t.trust} {e.trust}</span>
                 </div>
               ))}
+              <GitHubLinksSection
+                links={item.githubLinks ?? []}
+                ghInput={ghInput}
+                onGhInput={setGhInput}
+                onLink={() => { if (ghInput.trim()) { onLinkGitHub(item.id, ghInput.trim()); setGhInput(''); } }}
+              />
             </div>
           )}
           {tab === 'rde' && (
@@ -329,6 +337,54 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
           <button onClick={() => onBounce(item.id)} style={s.bounceBtn}>{t.btnReturnHuman}</button>
           <button onClick={() => onRunRde(item.id)} style={s.rdeBtn}>{t.btnRunRdeAudit}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function GitHubLinksSection({ links, ghInput, onGhInput, onLink }: {
+  links: GitHubLink[]; ghInput: string;
+  onGhInput: (v: string) => void; onLink: () => void;
+}) {
+  const stateColor = (s?: string) => s === 'open' ? '#5fb89f' : s === 'closed' ? '#d96b6b' : '#6a7078';
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ fontSize: 10.5, color: '#6a7078', marginBottom: 8, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
+        GitHub Issues / PRs
+      </div>
+      {links.length === 0 && <div style={{ fontSize: 11, color: '#4a5268', marginBottom: 8 }}>—</div>}
+      {links.map((l, i) => (
+        <a key={i} href={l.url} target="_blank" rel="noreferrer" style={{
+          display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none',
+          border: '1px solid #262a33', background: '#16191f', borderRadius: 8,
+          padding: '8px 11px', marginBottom: 6,
+        }}>
+          <span style={{ fontSize: 10, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+            {l.type === 'pr' ? 'PR' : '#'}{l.number}
+          </span>
+          <span style={{ fontSize: 11.5, color: '#c7d8f3', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {l.title ?? `${l.owner}/${l.repo}`}
+          </span>
+          {l.state && (
+            <span style={{ fontSize: 9.5, color: stateColor(l.state), whiteSpace: 'nowrap', flexShrink: 0 }}>{l.state}</span>
+          )}
+        </a>
+      ))}
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        <input
+          value={ghInput}
+          onChange={e => onGhInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && onLink()}
+          placeholder="https://github.com/owner/repo/issues/123"
+          style={{
+            flex: 1, background: '#1b1e25', border: '1px solid #3a4556', borderRadius: 7,
+            color: '#c8cdd5', fontSize: 11, padding: '6px 9px', fontFamily: 'inherit',
+          }}
+        />
+        <button onClick={onLink} style={{
+          border: 'none', background: '#243a5a', color: '#9cc0f5',
+          padding: '6px 10px', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+        }}>Link</button>
       </div>
     </div>
   );

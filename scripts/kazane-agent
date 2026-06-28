@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# kazane-agent — Agent CLI for Kazane Work OS (v0.2 nagare)
+# kazane-agent — Agent CLI for Kazane Work OS (v0.4 michi)
 #
 # Reads Work Items from the Kazane task queue and writes back Handoff Notes.
 # Kazane polls the handoffs directory every 10s and auto-imports results.
@@ -7,14 +7,24 @@
 # Usage:
 #   kazane-agent list                          — list pending tasks
 #   kazane-agent pickup                        — print task JSON for each pending item
+#   kazane-agent create --title <title> [opts] — create a new Work Item in SQLite
 #   kazane-agent submit <WI-ID>                — submit a completed handoff
 #   kazane-agent submit <WI-ID> --escalate "reason"  — submit with escalation
 #   kazane-agent auto                          — auto-process all pending tasks (demo)
 #   kazane-agent dirs                          — print task/handoff directory paths
 #
+# create options:
+#   --title <text>       Work item title (required)
+#   --domain <text>      Domain (default: 開発)
+#   --assignee <text>    Assignee (default: Claude Code)
+#   --ctx <CTX-ID>       Context Card ID (default: —)
+#   --risk 低|中|高       Risk level (default: 中)
+#   --next <text>        Next action text
+#
 # Directory locations (macOS):
 #   Tasks:    ~/Library/Application Support/jp.zyxcorp.kazane/tasks/
 #   Handoffs: ~/Library/Application Support/jp.zyxcorp.kazane/handoffs/
+#   DB:       ~/Library/Application Support/jp.zyxcorp.kazane/kazane.db
 
 set -euo pipefail
 
@@ -28,6 +38,7 @@ fi
 
 TASKS_DIR="$BASE_DIR/tasks"
 HANDOFFS_DIR="$BASE_DIR/handoffs"
+DB_PATH="$BASE_DIR/kazane.db"
 
 mkdir -p "$HANDOFFS_DIR"
 
@@ -166,6 +177,92 @@ case "$cmd" in
       cat "$f"
       echo ""
     done
+    ;;
+
+  create)
+    # Parse flags
+    wi_title=""
+    wi_domain="開発"
+    wi_assignee="Claude Code"
+    wi_ctx="—"
+    wi_risk="中"
+    wi_next="AIが着手予定"
+
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --title)    wi_title="$2";    shift 2 ;;
+        --domain)   wi_domain="$2";   shift 2 ;;
+        --assignee) wi_assignee="$2"; shift 2 ;;
+        --ctx)      wi_ctx="$2";      shift 2 ;;
+        --risk)     wi_risk="$2";     shift 2 ;;
+        --next)     wi_next="$2";     shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ -z "$wi_title" ]; then
+      echo "Usage: kazane-agent create --title <title> [--domain <domain>] [--assignee <assignee>] [--ctx <CTX-ID>] [--risk 低|中|高] [--next <nextAction>]" >&2
+      exit 1
+    fi
+
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2
+      echo "Launch Kazane once (npm run tauri dev) to initialize the database, then close it and retry." >&2
+      exit 1
+    fi
+
+    python3 - "$DB_PATH" "$wi_title" "$wi_domain" "$wi_assignee" "$wi_ctx" "$wi_risk" "$wi_next" <<'PYEOF'
+import sqlite3, json, sys, datetime
+
+db_path, title, domain, assignee, ctx_id, risk, next_action = sys.argv[1:8]
+
+gate = "AI権限内で着手可" if assignee in ("AI番頭", "AI Assistant", "Claude Code", "Codex", "ローカルLLM") else "人間レビュー待ち"
+now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+ctx_json = json.dumps({
+    "question": "この仕事はなぜ生まれたか（未記入）。",
+    "purpose": "目的を記入。",
+    "constraint": "制約・責任境界を記入。",
+    "unresolved": "未解決点を記入。",
+})
+ho_json = json.dumps({
+    "did": "未着手。", "uncertain": "—", "bounce": "—",
+    "next": "担当が着手し、Handoffを残す。",
+})
+
+con = sqlite3.connect(db_path)
+try:
+    # Get next WI id
+    rows = con.execute("SELECT id FROM work_items WHERE id LIKE 'WI-%'").fetchall()
+    nums = []
+    for (r,) in rows:
+        try:
+            nums.append(int(r.replace("WI-", "")))
+        except ValueError:
+            pass
+    next_num = max(nums, default=0) + 1
+    wi_id = f"WI-{next_num:03d}"
+
+    con.execute(
+        """INSERT INTO work_items
+           (id, title, domain, assignee, col, status, risk, context_id, next_action,
+            gate, rde, morning, bounced, gate_perm, gate_stops,
+            ctx_json, ho_json, ev_json, github_links_json, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?)
+           ON CONFLICT(id) DO NOTHING""",
+        (wi_id, title, domain, assignee, "inbox", "Inbox", risk, ctx_id, next_action,
+         gate, "整理・下調べ・草案", "外部送信／契約／金銭／専門家判断",
+         ctx_json, ho_json, now, now),
+    )
+    con.commit()
+    print(f"Created: {wi_id} — {title}")
+    print(f"  domain={domain}  assignee={assignee}  risk={risk}")
+    print(f"  DB: {db_path}")
+    print("Kazane will show the new item on next launch (or reload if already open).")
+finally:
+    con.close()
+PYEOF
     ;;
 
   submit)

@@ -191,6 +191,14 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "add_github_links_to_work_items",
+            sql: "
+                ALTER TABLE work_items ADD COLUMN github_links_json TEXT NOT NULL DEFAULT '[]';
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
