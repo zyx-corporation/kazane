@@ -1,4 +1,4 @@
-import type { WorkItem, ContextCard, HandoffNote, GateRule, RdeEvidence } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, GateRule, RdeEvidence, AgentProfile } from '../types';
 
 export const seedItems: WorkItem[] = [
   {
@@ -229,6 +229,39 @@ export const gateRulesData: GateRule[] = [
   { domain: '執筆・広報', perm: ['草稿', '校正', '構成', 'RDE監査'], stops: ['公開', '強い主張', '第三者批判', '未確認情報の断定'] },
   { domain: '開発', perm: ['調査', 'テスト案', 'patch案', 'PR下書き'], stops: ['本番反映', '破壊的変更', '公開API変更', 'セキュリティ影響'] },
   { domain: 'AI番頭', perm: ['記憶整理', '提案', '返信案', '業務整理'], stops: ['顧客約束', '金銭', '契約', '医療・法律・税務判断'] },
+];
+
+export const agentProfilesData: AgentProfile[] = [
+  {
+    id: 'AGT-01', name: 'AI番頭', model: 'claude-sonnet-4-6', trustLevel: '中',
+    capabilities: ['業務記憶整理', '返信案作成', '情報収集', '引き継ぎノート作成', 'Context整理'],
+    gatePerm: '整理・草案・記録・下調べ',
+    gateStops: '顧客への送信／価格提示／契約条件／金銭操作／医療・法律・税務判断',
+  },
+  {
+    id: 'AGT-02', name: 'AI Assistant', model: 'claude-haiku-4-5', trustLevel: '中',
+    capabilities: ['タスク整理', 'ドキュメント作成', '検索・要約', '会議準備'],
+    gatePerm: '草案・要約・整理',
+    gateStops: '外部送信／専門家判断領域／本番反映',
+  },
+  {
+    id: 'AGT-03', name: 'Claude Code', model: 'claude-sonnet-4-6', trustLevel: '高',
+    capabilities: ['コード調査', 'バグ分析', 'PR下書き', 'テスト案作成', 'ドキュメント生成'],
+    gatePerm: '調査・実装・テスト・PR下書き',
+    gateStops: '本番反映／破壊的変更／公開API変更／セキュリティ影響',
+  },
+  {
+    id: 'AGT-04', name: 'Codex', model: 'openai-codex', trustLevel: '中',
+    capabilities: ['コード補完', '比較表作成', 'ドキュメント整理'],
+    gatePerm: '補完・整理・ドラフト',
+    gateStops: '本番反映／外部公開／専門家領域',
+  },
+  {
+    id: 'AGT-05', name: 'ローカルLLM', model: 'local-model', trustLevel: '低',
+    capabilities: ['草案作成', 'テキスト整理', '内部調査'],
+    gatePerm: '草案・内部整理のみ',
+    gateStops: '外部送信／顧客データ処理／本番関連操作',
+  },
 ];
 
 export const rdeEvidenceData: RdeEvidence[] = [

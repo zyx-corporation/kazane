@@ -120,6 +120,16 @@ export interface WorkEvent {
   createdAt: string;
 }
 
+export interface AgentProfile {
+  id: string;
+  name: string;
+  model: string;
+  trustLevel: TrustLevel;
+  capabilities: string[];
+  gatePerm: string;
+  gateStops: string;
+}
+
 export interface GateRule {
   domain: string;
   perm: string[];

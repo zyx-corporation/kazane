@@ -59,6 +59,8 @@ export interface Translations {
   timelineEmpty: string;
   btnProposeCtxUpdate: string;
   toastCtxUpdated: string;
+  agentProfilesHd: string;
+  agentTrust: string;
 }
 
 const T: Record<Lang, Translations> = {
@@ -116,6 +118,8 @@ const T: Record<Lang, Translations> = {
     timelineEmpty: 'このWork Itemの履歴はまだ記録されていません。',
     btnProposeCtxUpdate: 'を更新（このHOから）',
     toastCtxUpdated: '{ctxId} を Handoff Note から更新しました',
+    agentProfilesHd: 'Agent プロファイル',
+    agentTrust: '信頼度',
   },
   en: {
     tagline1: 'Hear the signals of work,', tagline2: 'chronicle the lineage of decisions.',
@@ -171,6 +175,8 @@ const T: Record<Lang, Translations> = {
     timelineEmpty: 'No history recorded for this Work Item yet.',
     btnProposeCtxUpdate: '→ update from this HO',
     toastCtxUpdated: '{ctxId} updated from Handoff Note',
+    agentProfilesHd: 'Agent Profiles',
+    agentTrust: 'Trust',
   },
   zh: {
     tagline1: '聆听工作的气息，', tagline2: '记录决策的脉络。',
@@ -226,6 +232,8 @@ const T: Record<Lang, Translations> = {
     timelineEmpty: '此 Work Item 暂无历史记录。',
     btnProposeCtxUpdate: '→ 从此 HO 更新',
     toastCtxUpdated: '{ctxId} 已从 Handoff Note 更新',
+    agentProfilesHd: 'Agent 档案',
+    agentTrust: '可信度',
   },
 };
 

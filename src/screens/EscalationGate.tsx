@@ -1,16 +1,17 @@
-import type { GateRule, EnrichedWorkItem } from '../types';
-import { GATE_DOMAIN_COLORS } from '../types';
+import type { GateRule, EnrichedWorkItem, AgentProfile } from '../types';
+import { GATE_DOMAIN_COLORS, trustColor } from '../types';
 import type { Translations } from '../i18n';
 
 interface EscalationGateProps {
   gateRules: GateRule[];
+  agentProfiles: AgentProfile[];
   gateDomain: string;
   t: Translations;
   items: EnrichedWorkItem[];
   onSetGateDomain: (d: string) => void;
 }
 
-export function EscalationGate({ gateRules, gateDomain, t, items, onSetGateDomain }: EscalationGateProps) {
+export function EscalationGate({ gateRules, agentProfiles, gateDomain, t, items, onSetGateDomain }: EscalationGateProps) {
   const domainCounts: Record<string, number> = {};
   for (const it of items) { domainCounts[it.domain] = (domainCounts[it.domain] ?? 0) + 1; }
   const chips = [{ key: 'all', label: t.chipAll }, ...gateRules.map(r => ({ key: r.domain, label: r.domain }))];
@@ -92,6 +93,24 @@ export function EscalationGate({ gateRules, gateDomain, t, items, onSetGateDomai
           <Panel title={t.stopTemplates}>
             {[t.st1, t.st2, t.st3, t.st4].map((st, i) => (
               <div key={i} style={s.stopTemplate}>{st}</div>
+            ))}
+          </Panel>
+
+          <Panel title={t.agentProfilesHd}>
+            {agentProfiles.map(ap => (
+              <div key={ap.id} style={{ border: '1px solid #262a33', background: '#16191f', borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#dfe3e8' }}>{ap.name}</span>
+                  <span style={{ fontSize: 10, color: trustColor(ap.trustLevel), fontFamily: "'JetBrains Mono', monospace" }}>{t.agentTrust} {ap.trustLevel}</span>
+                </div>
+                <div style={{ fontSize: 9.5, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", marginBottom: 5 }}>{ap.model}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {ap.capabilities.slice(0, 3).map(c => (
+                    <span key={c} style={{ fontSize: 9.5, color: '#7dd4cc', background: '#131f22', border: '1px solid #1d3840', padding: '1px 6px', borderRadius: 4 }}>{c}</span>
+                  ))}
+                  {ap.capabilities.length > 3 && <span style={{ fontSize: 9.5, color: '#6a7078' }}>+{ap.capabilities.length - 3}</span>}
+                </div>
+              </div>
             ))}
           </Panel>
         </div>

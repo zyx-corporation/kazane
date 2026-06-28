@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
-import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData } from './data/seed';
+import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData, agentProfilesData } from './data/seed';
 import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
@@ -199,10 +199,20 @@ export default function App() {
     let changed: WorkItem | undefined;
     const updated = items.map(i => {
       if (i.id !== id) return i;
-      changed = { ...i, rde: true, rdeAudit: i.rdeAudit ?? { kept: '仕事の主旨を維持。', transformed: '実施内容を要約・構造化。', unresolved: '監査者の確認待ち項目。' } };
+      if (!i.rdeAudit) {
+        const kept = `「${i.ctx.question}」という問いの主旨を維持。目的：${i.ctx.purpose}`;
+        const transformed = i.ho.did !== '未着手。'
+          ? `${i.ho.did} 実施内容を要約・構造化した。`
+          : `${i.domain}領域の作業として整理・構造化した。`;
+        const unresolved = i.ctx.unresolved || i.ho.uncertain || '監査者の確認待ち項目。';
+        changed = { ...i, rde: true, rdeAudit: { kept, transformed, unresolved } };
+      } else {
+        changed = { ...i, rde: true };
+      }
       return changed;
     });
     setItems(updated); persist(updated, changed);
+    logEv(id, 'rde_run', { actor: 'human', note: 'RDE監査開始' });
     setScreen('rde'); setSelId(null);
     flash(t.toastRde.replace('{id}', id));
   }
@@ -512,7 +522,7 @@ export default function App() {
             />
           )}
           {screen === 'gate' && (
-            <EscalationGate gateRules={gateRulesData} gateDomain={gateDomain} t={t} items={enriched} onSetGateDomain={setGateDomain} />
+            <EscalationGate gateRules={gateRulesData} agentProfiles={agentProfilesData} gateDomain={gateDomain} t={t} items={enriched} onSetGateDomain={setGateDomain} />
           )}
           {screen === 'rde' && (
             <RdeEvidenceAudit rdeEvidence={rdeEvidenceData} t={t}
