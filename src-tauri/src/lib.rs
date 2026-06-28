@@ -170,6 +170,27 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "create_gate_rules_and_agent_profiles",
+            sql: "
+                CREATE TABLE IF NOT EXISTS gate_rules (
+                    domain TEXT PRIMARY KEY NOT NULL,
+                    perm_json TEXT NOT NULL DEFAULT '[]',
+                    stops_json TEXT NOT NULL DEFAULT '[]'
+                );
+                CREATE TABLE IF NOT EXISTS agent_profiles (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    model TEXT NOT NULL DEFAULT '',
+                    trust_level TEXT NOT NULL DEFAULT '中',
+                    capabilities_json TEXT NOT NULL DEFAULT '[]',
+                    gate_perm TEXT NOT NULL DEFAULT '',
+                    gate_stops TEXT NOT NULL DEFAULT ''
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

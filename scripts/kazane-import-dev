@@ -704,6 +704,57 @@ EVIDENCE = [
 # ─────────────────────────────────────────────
 # Events（Work Timeline 用）
 # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# Gate Rules
+# ─────────────────────────────────────────────
+GATE_RULES = [
+    {"domain": "顧客対応",   "perm": ["問い合わせ整理", "返信案作成", "過去履歴参照"],         "stops": ["送信", "価格提示", "契約条件", "謝罪・責任表明", "顧客約束"]},
+    {"domain": "営業",       "perm": ["提案案", "比較表", "商談メモ整理"],                    "stops": ["見積", "契約条件", "外部提示", "導入時期確約"]},
+    {"domain": "経理・総務", "perm": ["資料整理", "日付・金額の抽出", "下調べ"],               "stops": ["税務判断", "申告", "支払", "法的判断", "専門家判断領域"]},
+    {"domain": "執筆・広報", "perm": ["草稿", "校正", "構成", "RDE監査"],                    "stops": ["公開", "強い主張", "第三者批判", "未確認情報の断定"]},
+    {"domain": "開発",       "perm": ["調査", "テスト案", "patch案", "PR下書き"],            "stops": ["本番反映", "破壊的変更", "公開API変更", "セキュリティ影響"]},
+    {"domain": "AI番頭",     "perm": ["記憶整理", "提案", "返信案", "業務整理"],              "stops": ["顧客約束", "金銭", "契約", "医療・法律・税務判断"]},
+]
+
+# ─────────────────────────────────────────────
+# Agent Profiles
+# ─────────────────────────────────────────────
+AGENT_PROFILES = [
+    {
+        "id": "AGT-01", "name": "AI番頭", "model": "claude-sonnet-4-6", "trust_level": "中",
+        "capabilities_json": json.dumps(["業務記憶整理", "返信案作成", "情報収集", "引き継ぎノート作成", "Context整理"], ensure_ascii=False),
+        "gate_perm": "整理・草案・記録・下調べ",
+        "gate_stops": "顧客への送信／価格提示／契約条件／金銭操作／医療・法律・税務判断",
+    },
+    {
+        "id": "AGT-02", "name": "AI Assistant", "model": "claude-haiku-4-5", "trust_level": "中",
+        "capabilities_json": json.dumps(["タスク整理", "ドキュメント作成", "検索・要約", "会議準備"], ensure_ascii=False),
+        "gate_perm": "草案・要約・整理",
+        "gate_stops": "外部送信／専門家判断領域／本番反映",
+    },
+    {
+        "id": "AGT-03", "name": "Claude Code", "model": "claude-sonnet-4-6", "trust_level": "高",
+        "capabilities_json": json.dumps(["コード調査", "バグ分析", "PR下書き", "テスト案作成", "ドキュメント生成"], ensure_ascii=False),
+        "gate_perm": "調査・実装・テスト・PR下書き",
+        "gate_stops": "本番反映／破壊的変更／公開API変更／セキュリティ影響",
+    },
+    {
+        "id": "AGT-04", "name": "Codex", "model": "openai-codex", "trust_level": "中",
+        "capabilities_json": json.dumps(["コード補完", "比較表作成", "ドキュメント整理"], ensure_ascii=False),
+        "gate_perm": "補完・整理・ドラフト",
+        "gate_stops": "本番反映／外部公開／専門家領域",
+    },
+    {
+        "id": "AGT-05", "name": "ローカルLLM", "model": "local-model", "trust_level": "低",
+        "capabilities_json": json.dumps(["草案作成", "テキスト整理", "内部調査"], ensure_ascii=False),
+        "gate_perm": "草案・内部整理のみ",
+        "gate_stops": "外部送信／顧客データ処理／本番関連操作",
+    },
+]
+
+# ─────────────────────────────────────────────
+# Events（Work Timeline 用）
+# ─────────────────────────────────────────────
 EVENTS = [
     {"id": "EVT-001", "wi_id": "WI-D00", "event_type": "created",   "from_col": "",     "to_col": "inbox", "actor": "Tomoyuki Kano", "note": "v0.0 kiri開始",                                 "created_at": "2026-06-26T10:00:00"},
     {"id": "EVT-002", "wi_id": "WI-D00", "event_type": "ai_run",    "from_col": "inbox","to_col": "ai",    "actor": "Claude Code",   "note": "v0.0実装着手",                                  "created_at": "2026-06-26T10:30:00"},
@@ -737,6 +788,8 @@ def main():
     print(f"  {len(HANDOFFS)} Handoff Notes")
     print(f"  {len(EVIDENCE)} Evidence entries")
     print(f"  {len(EVENTS)} Events")
+    print(f"  {len(GATE_RULES)} Gate Rules")
+    print(f"  {len(AGENT_PROFILES)} Agent Profiles")
 
     if DRY:
         return
@@ -803,6 +856,20 @@ def main():
             e["id"], e["wi_id"], e["event_type"], e["from_col"],
             e["to_col"], e["actor"], e["note"], e["created_at"],
         ))
+
+    for g in GATE_RULES:
+        cur.execute("""
+            INSERT OR REPLACE INTO gate_rules (domain, perm_json, stops_json)
+            VALUES (?,?,?)
+        """, (g["domain"], json.dumps(g["perm"], ensure_ascii=False), json.dumps(g["stops"], ensure_ascii=False)))
+
+    for a in AGENT_PROFILES:
+        cur.execute("""
+            INSERT OR REPLACE INTO agent_profiles
+              (id, name, model, trust_level, capabilities_json, gate_perm, gate_stops)
+            VALUES (?,?,?,?,?,?,?)
+        """, (a["id"], a["name"], a["model"], a["trust_level"],
+              a["capabilities_json"], a["gate_perm"], a["gate_stops"]))
 
     con.commit()
     con.close()

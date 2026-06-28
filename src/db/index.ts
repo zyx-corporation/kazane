@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile } from '../types';
 
 let _db: Database | null = null;
 
@@ -163,6 +163,56 @@ export async function dbAddEvidenceEntry(ev: EvidenceLogEntry): Promise<void> {
     `INSERT OR IGNORE INTO evidence_log (id, type, label, trust, store, wi_id, ho_id, ctx_id, note, created_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [ev.id, ev.type, ev.label, ev.trust, ev.store, ev.wiId, ev.hoId, ev.ctxId, ev.note, ev.createdAt],
+  );
+}
+
+// ---------- Gate Rules ----------
+
+export async function dbListGateRules(): Promise<GateRule[]> {
+  const d = await db();
+  const rows = await d.select<Record<string, unknown>[]>('SELECT * FROM gate_rules ORDER BY domain');
+  return rows.map(r => ({
+    domain: r.domain as string,
+    perm: JSON.parse(r.perm_json as string),
+    stops: JSON.parse(r.stops_json as string),
+  }));
+}
+
+export async function dbUpsertGateRule(rule: GateRule): Promise<void> {
+  const d = await db();
+  await d.execute(
+    `INSERT INTO gate_rules (domain, perm_json, stops_json)
+     VALUES ($1,$2,$3)
+     ON CONFLICT(domain) DO UPDATE SET perm_json=$2, stops_json=$3`,
+    [rule.domain, JSON.stringify(rule.perm), JSON.stringify(rule.stops)],
+  );
+}
+
+// ---------- Agent Profiles ----------
+
+export async function dbListAgentProfiles(): Promise<AgentProfile[]> {
+  const d = await db();
+  const rows = await d.select<Record<string, unknown>[]>('SELECT * FROM agent_profiles ORDER BY name');
+  return rows.map(r => ({
+    id: r.id as string,
+    name: r.name as string,
+    model: r.model as string,
+    trustLevel: r.trust_level as AgentProfile['trustLevel'],
+    capabilities: JSON.parse(r.capabilities_json as string),
+    gatePerm: r.gate_perm as string,
+    gateStops: r.gate_stops as string,
+  }));
+}
+
+export async function dbUpsertAgentProfile(profile: AgentProfile): Promise<void> {
+  const d = await db();
+  await d.execute(
+    `INSERT INTO agent_profiles (id, name, model, trust_level, capabilities_json, gate_perm, gate_stops)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT(id) DO UPDATE SET
+       name=$2, model=$3, trust_level=$4, capabilities_json=$5, gate_perm=$6, gate_stops=$7`,
+    [profile.id, profile.name, profile.model, profile.trustLevel,
+     JSON.stringify(profile.capabilities), profile.gatePerm, profile.gateStops],
   );
 }
 

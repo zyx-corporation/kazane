@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry, GateRule, AgentProfile } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
-import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry } from './db';
+import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry, dbListGateRules, dbListAgentProfiles } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { WorkItemDrawer } from './components/WorkItemDrawer';
@@ -83,8 +83,8 @@ export default function App() {
   const [contexts, setContexts] = useState<ContextCard[]>([]);
   const [handoffs, setHandoffs] = useState<HandoffNote[]>([]);
   const [evidenceLog, setEvidenceLog] = useState<EvidenceLogEntry[]>([]);
-  const [gateRules] = useState<GateRule[]>([]);
-  const [agentProfiles] = useState<AgentProfile[]>([]);
+  const [gateRules, setGateRules] = useState<GateRule[]>([]);
+  const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [dbReady, setDbReady] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
   const [tab, setTab] = useState<DrawerTab>('context');
@@ -130,12 +130,14 @@ export default function App() {
   useEffect(() => {
     if (!IS_TAURI) return;
     let cancelled = false;
-    Promise.all([dbListItems(), dbListContextCards(), dbListHandoffs(), dbListEvidenceLog()]).then(([rows, ctxRows, hoRows, evRows]) => {
+    Promise.all([dbListItems(), dbListContextCards(), dbListHandoffs(), dbListEvidenceLog(), dbListGateRules(), dbListAgentProfiles()]).then(([rows, ctxRows, hoRows, evRows, gateRows, agentRows]) => {
       if (cancelled) return;
       setItems(rows);
       setContexts(ctxRows);
       setHandoffs(hoRows);
       setEvidenceLog(evRows);
+      setGateRules(gateRows);
+      setAgentProfiles(agentRows);
       setDbReady(true);
     }).catch(() => { if (!cancelled) setDbReady(false); });
     return () => { cancelled = true; };
