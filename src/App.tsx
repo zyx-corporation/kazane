@@ -48,6 +48,7 @@ function loadItemsFromStorage(): WorkItem[] | null {
 }
 
 function persistLocal(items: WorkItem[]) {
+  if (IS_TAURI) return;
   try { localStorage.setItem('kazane_items', JSON.stringify(items)); } catch (_) {}
 }
 
@@ -79,7 +80,7 @@ function downloadJson(data: unknown, filename: string) {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard');
-  const [items, setItems] = useState<WorkItem[]>(loadItemsFromStorage() ?? []);
+  const [items, setItems] = useState<WorkItem[]>(IS_TAURI ? [] : (loadItemsFromStorage() ?? []));
   const [contexts, setContexts] = useState<ContextCard[]>([]);
   const [handoffs, setHandoffs] = useState<HandoffNote[]>([]);
   const [evidenceLog, setEvidenceLog] = useState<EvidenceLogEntry[]>([]);
