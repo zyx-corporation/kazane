@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry } from './types';
 import { enrichItem, COL_NAMES, isAiActor } from './types';
 import { getT } from './i18n';
-import { seedItems, seedContexts, seedHandoffs, gateRulesData, rdeEvidenceData, agentProfilesData } from './data/seed';
+import { gateRulesData, agentProfilesData } from './data/seed';
 import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry } from './db';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
@@ -79,9 +79,9 @@ function downloadJson(data: unknown, filename: string) {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('dashboard');
-  const [items, setItems] = useState<WorkItem[]>(loadItemsFromStorage() ?? seedItems);
-  const [contexts, setContexts] = useState<ContextCard[]>(seedContexts);
-  const [handoffs, setHandoffs] = useState(seedHandoffs);
+  const [items, setItems] = useState<WorkItem[]>(loadItemsFromStorage() ?? []);
+  const [contexts, setContexts] = useState<ContextCard[]>([]);
+  const [handoffs, setHandoffs] = useState<HandoffNote[]>([]);
   const [evidenceLog, setEvidenceLog] = useState<EvidenceLogEntry[]>([]);
   const [dbReady, setDbReady] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
@@ -130,33 +130,10 @@ export default function App() {
     let cancelled = false;
     Promise.all([dbListItems(), dbListContextCards(), dbListHandoffs(), dbListEvidenceLog()]).then(([rows, ctxRows, hoRows, evRows]) => {
       if (cancelled) return;
-      if (rows.length > 0) {
-        setItems(rows);
-      } else {
-        Promise.all(seedItems.map(si => dbUpsertItem(si)));
-      }
-      if (ctxRows.length > 0) {
-        setContexts(ctxRows);
-      } else {
-        Promise.all(seedContexts.map(c => dbUpsertContextCard(c)));
-      }
-      if (hoRows.length > 0) {
-        setHandoffs(hoRows);
-      } else {
-        Promise.all(seedHandoffs.map(ho => dbUpsertHandoff(ho)));
-      }
-      if (evRows.length > 0) {
-        setEvidenceLog(evRows);
-      } else {
-        const seedEv = rdeEvidenceData.map((e, i) => ({
-          id: `EV-SEED-${String(i + 1).padStart(3, '0')}`,
-          type: e.type, label: e.label, trust: e.trust as EvidenceLogEntry['trust'],
-          store: e.store, wiId: '', hoId: '', ctxId: '', note: '',
-          createdAt: new Date().toISOString(),
-        }));
-        setEvidenceLog(seedEv);
-        Promise.all(seedEv.map(ev => dbAddEvidenceEntry(ev)));
-      }
+      setItems(rows);
+      setContexts(ctxRows);
+      setHandoffs(hoRows);
+      setEvidenceLog(evRows);
       setDbReady(true);
     }).catch(() => { if (!cancelled) setDbReady(false); });
     return () => { cancelled = true; };
@@ -460,20 +437,12 @@ export default function App() {
   async function resetDemo() {
     if (IS_TAURI && dbReady) {
       try {
-        const [current, currentCtx] = await Promise.all([dbListItems(), dbListContextCards()]);
-        await Promise.all([
-          ...current.map(i => dbDeleteItem(i.id)),
-          ...currentCtx.map(() => Promise.resolve()),
-        ]);
-        await Promise.all([
-          ...seedItems.map(si => dbUpsertItem(si)),
-          ...seedContexts.map(c => dbUpsertContextCard(c)),
-          ...seedHandoffs.map(ho => dbUpsertHandoff(ho)),
-        ]);
+        const current = await dbListItems();
+        await Promise.all(current.map(i => dbDeleteItem(i.id)));
       } catch (_) {}
     }
-    try { localStorage.setItem('kazane_items', JSON.stringify(seedItems)); } catch (_) {}
-    setItems(seedItems); setContexts(seedContexts); setHandoffs(seedHandoffs);
+    try { localStorage.removeItem('kazane_items'); } catch (_) {}
+    setItems([]); setContexts([]); setHandoffs([]); setEvidenceLog([]);
     setSelId(null); setWiModalOpen(false); setCtxModalOpen(false);
     flash(t.btnReset);
   }
