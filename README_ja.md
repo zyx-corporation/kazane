@@ -53,6 +53,10 @@ Kazane は、Prototype First、TDD / Test First、T-RDE、GitHub Issue と紐づ
 
 詳細は [docs/development-methodology.md](docs/development-methodology.md)、[docs/testing-strategy.md](docs/testing-strategy.md)、[docs/t-rde-policy.md](docs/t-rde-policy.md)、[docs/issue-kanban-workflow.md](docs/issue-kanban-workflow.md) を参照してください。
 
+## Chronicle-native work extensions
+
+Kazane は、AI Native Development の有用なインタラクション設計を取り込みつつ、AI IDE には還元されない Chronicle Work OS として発展させます。Living PRD、AI Activity Timeline、Micro Change Workflow、Chronicle Diff、Intent Graph などの追加仕様は [docs/chronicle-native-work-extensions.md](docs/chronicle-native-work-extensions.md) を参照してください。
+
 ## 設計原則
 
 1. 自動化より文脈主権を優先する。

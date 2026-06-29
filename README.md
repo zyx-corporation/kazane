@@ -53,6 +53,10 @@ Kazane is developed through Prototype First, TDD/Test First, T-RDE, and an Agile
 
 See [docs/development-methodology.md](docs/development-methodology.md), [docs/testing-strategy.md](docs/testing-strategy.md), [docs/t-rde-policy.md](docs/t-rde-policy.md), and [docs/issue-kanban-workflow.md](docs/issue-kanban-workflow.md).
 
+## Chronicle-native work extensions
+
+Kazane adopts useful interaction patterns from AI-native development workflows without reducing itself to an AI IDE. Proposed extensions such as Living PRD, AI Activity Timeline, Micro Change Workflow, Chronicle Diff, and Intent Graph are described in [docs/chronicle-native-work-extensions.md](docs/chronicle-native-work-extensions.md).
+
 ## Design principles
 
 1. Prefer context sovereignty over automation.
