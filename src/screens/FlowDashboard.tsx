@@ -9,6 +9,16 @@ interface FlowDashboardProps {
   onNav: (s: Screen) => void;
 }
 
+const STALE_DAYS = 7;
+function countStale(items: EnrichedWorkItem[]): number {
+  const cutoff = Date.now() - STALE_DAYS * 86_400_000;
+  return items.filter(i => {
+    if (i.col === 'done') return false;
+    const ref = i.updatedAt;
+    return ref ? new Date(ref).getTime() < cutoff : false;
+  }).length;
+}
+
 function nowLabel(): string {
   const d = new Date();
   return d.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-') + ' · ' +
@@ -23,11 +33,13 @@ export function FlowDashboard({ items, t, onOpenItem, onNav }: FlowDashboardProp
     name, dc, count: items.filter(i => i.domain === name).length,
   }));
 
+  const staleCount = countStale(items);
   const sumCards = [
     { label: t.cInProgress, value: items.filter(i => i.col === 'ai' || i.col === 'inbox').length, sub: t.sInProgress, color: '#5b8def', onClick: () => onNav('board') },
     { label: t.cHuman, value: items.filter(i => i.col === 'human').length, sub: t.sHuman, color: '#d9a93f', onClick: () => onNav('board') },
     { label: t.cRde, value: items.filter(i => i.rde).length, sub: t.sRde, color: '#b6a6ee', onClick: () => onNav('rde') },
     { label: t.cGate, value: items.filter(i => i.col === 'gate').length, sub: t.sGate, color: '#a07fe0', onClick: () => onNav('gate') },
+    { label: '停滞', value: staleCount, sub: `${STALE_DAYS}日以上更新なし`, color: staleCount > 0 ? '#a89464' : '#4a5268', onClick: () => onNav('board') },
   ];
 
   return (
@@ -157,7 +169,7 @@ const s: Record<string, React.CSSProperties> = {
   mono: { fontSize: 11, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace" },
   summaryBar: { marginTop: 18, padding: '14px 16px', background: '#171f1c', border: '1px solid #25382f', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 },
   greenDot: { width: 8, height: 8, borderRadius: '50%', background: '#5fb89f', flexShrink: 0 },
-  statGrid: { marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 },
+  statGrid: { marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 },
   statCard: { textAlign: 'left', border: '1px solid #262a33', background: '#1a1d24', borderRadius: 11, padding: '15px 16px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6 },
   panels: { marginTop: 22, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 },
   stack: { display: 'flex', flexDirection: 'column', gap: 8 },

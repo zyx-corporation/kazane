@@ -2,6 +2,16 @@ import { useState, useMemo } from 'react';
 import type { EnrichedWorkItem, BoardCol } from '../types';
 import type { Translations } from '../i18n';
 
+const STALE_DAYS = 7;
+
+function isStale(item: EnrichedWorkItem): boolean {
+  if (item.col === 'done') return false;
+  const ref = item.updatedAt ?? (item as { updated_at?: string }).updated_at;
+  if (!ref) return false;
+  const diffMs = Date.now() - new Date(ref).getTime();
+  return diffMs > STALE_DAYS * 86_400_000;
+}
+
 const COLS = [
   { key: 'inbox' as const, name: 'Inbox', color: '#6a7078' },
   { key: 'ai' as const, name: 'AI Working', color: '#5b8def' },
@@ -99,9 +109,10 @@ function WorkCard({ item, menuOpen, onOpen, onMenuToggle, onMove, currentCol }: 
   onMove: (col: BoardCol) => void;
   currentCol: BoardCol;
 }) {
+  const stale = isStale(item);
   return (
     <div style={{ position: 'relative' }}>
-      <div onClick={onOpen} style={{ ...s.card, borderLeft: `3px solid ${item.dc}` }}>
+      <div onClick={onOpen} style={{ ...s.card, borderLeft: `3px solid ${item.dc}`, ...(stale ? { boxShadow: 'inset 0 0 0 1px #3a3220' } : {}) }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: '#aeb4bf' }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.dc }} />{item.domain}
@@ -124,6 +135,7 @@ function WorkCard({ item, menuOpen, onOpen, onMenuToggle, onMove, currentCol }: 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={s.gateChip}>⚑ {item.gate}</span>
           {item.rde && <span style={s.rdeChip}>RDE要</span>}
+          {stale && <span style={s.staleChip}>停滞 {STALE_DAYS}d+</span>}
         </div>
         <div style={s.tagRow}>
           {['文脈', '引継', '証跡', '監査'].map(tg => <span key={tg} style={s.tag}>{tg}</span>)}
@@ -175,6 +187,7 @@ const s: Record<string, React.CSSProperties> = {
   nextAction: { fontSize: 10.5, color: '#9aa1ad', background: '#171a20', border: '1px solid #262a33', borderRadius: 6, padding: '5px 8px' },
   gateChip: { fontSize: 9.5, color: '#c9b27a', background: '#241f16', border: '1px solid #3a3220', padding: '3px 7px', borderRadius: 5 },
   rdeChip: { fontSize: 9.5, color: '#b6a6ee', background: '#1d1a29', border: '1px solid #322c47', padding: '3px 7px', borderRadius: 5 },
+  staleChip: { fontSize: 9.5, color: '#a89464', background: '#241f16', border: '1px solid #3a3220', padding: '3px 7px', borderRadius: 5 },
   tagRow: { display: 'flex', gap: 4, paddingTop: 2, borderTop: '1px solid #23272f' },
   tag: { fontSize: 9, color: '#6a7078', background: '#16191f', padding: '2px 6px', borderRadius: 4 },
   moveMenu: { position: 'absolute', top: 0, right: -142, zIndex: 40, background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 9, padding: '9px 8px', width: 135, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' },

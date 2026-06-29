@@ -246,6 +246,7 @@ function rowToItem(r: Record<string, unknown>): WorkItem {
     agentEscalated: Boolean(r.agent_escalated),
     escalationReason: r.escalation_reason as string | undefined || undefined,
     githubLinks: r.github_links_json ? (JSON.parse(r.github_links_json as string) as GitHubLink[]) : [],
+    updatedAt: r.updated_at as string | undefined || undefined,
   };
 }
 

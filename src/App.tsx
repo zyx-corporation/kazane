@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry, GateRule, AgentProfile, GitHubLink } from './types';
-import { enrichItem, COL_NAMES, isAiActor } from './types';
+import { enrichItem, COL_NAMES, isAiActor, DOMAIN_TEMPLATES } from './types';
 import { getT } from './i18n';
 import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry, dbListGateRules, dbListAgentProfiles } from './db';
 import { Sidebar } from './components/Sidebar';
@@ -350,21 +350,34 @@ export default function App() {
   function addItem(partial: Partial<WorkItem> & { title: string; domain: string; assignee: string }) {
     const id = nextId(items);
     const isAI = isAiActor(partial.assignee);
+    const tmpl = DOMAIN_TEMPLATES[partial.domain];
     const it: WorkItem = {
       id, col: 'inbox', status: colStatus('inbox'), risk: '中',
-      contextId: '—', nextAction: 'AIが着手予定',
-      gate: isAI ? 'AI権限内で着手可' : '人間レビュー待ち',
+      contextId: '—', nextAction: isAI ? 'AIが着手予定' : '担当が着手予定',
       rde: false, morning: false, bounced: false,
-      ctx: { question: 'この仕事はなぜ生まれたか（未記入）。', purpose: '目的を記入。', constraint: '制約・責任境界を記入。', unresolved: '未解決点を記入。' },
-      ho: { did: '未着手。', uncertain: '—', bounce: '—', next: '担当が着手し、Handoffを残す。' },
-      ev: [], gatePerm: '整理・下調べ・草案', gateStops: '外部送信／契約／金銭／専門家判断',
+      ctx: tmpl?.ctx ?? { question: 'この仕事はなぜ生まれたか（未記入）。', purpose: '目的を記入。', constraint: '制約・責任境界を記入。', unresolved: '未解決点を記入。' },
+      ho: tmpl?.ho ?? { did: '未着手。', uncertain: '—', bounce: '—', next: '担当が着手し、Handoffを残す。' },
+      ev: [],
+      gatePerm: tmpl?.gatePerm ?? '整理・下調べ・草案',
+      gateStops: tmpl?.gateStops ?? '外部送信／契約／金銭／専門家判断',
       ...partial,
+      gate: partial.gate ?? (tmpl?.gate ?? (isAI ? 'AI権限内で着手可' : '人間レビュー待ち')),
     };
     const updated = [it, ...items];
     setItems(updated); persist(updated, it);
     logEv(id, 'created', { toCol: it.col, actor: it.assignee, note: it.title });
     setWiModalOpen(false);
     flash(t.toastAdded.replace('{id}', id));
+  }
+
+  function toggleMorning(id: string) {
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== id) return i;
+      changed = { ...i, morning: !i.morning };
+      return changed;
+    });
+    setItems(updated); persist(updated, changed);
   }
 
   function submitForm() {
@@ -581,6 +594,7 @@ export default function App() {
           onDeleteItem={deleteItem}
           onLoadEvents={id => IS_TAURI && dbReady ? dbListEvents(id) : Promise.resolve([])}
           onLinkGitHub={linkGitHub}
+          onToggleMorning={toggleMorning}
           onGoCtx={() => { nav('context'); }}
           onGoCtxById={goCtxById}
           onGoHand={() => { nav('handoff'); }}

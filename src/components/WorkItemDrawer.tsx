@@ -50,6 +50,7 @@ interface WorkItemDrawerProps {
   onDeleteItem: (id: string) => void;
   onLoadEvents: (wiId: string) => Promise<WorkEvent[]>;
   onLinkGitHub: (wiId: string, url: string) => void;
+  onToggleMorning: (wiId: string) => void;
   onGoCtx: () => void;
   onGoCtxById: (id: string) => void;
   onGoHand: () => void;
@@ -57,7 +58,7 @@ interface WorkItemDrawerProps {
   onGoGate: () => void;
 }
 
-export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onToggleMorning, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
   const [events, setEvents] = useState<WorkEvent[]>([]);
@@ -305,6 +306,13 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
               )}
             </div>
           )}
+          <button
+            onClick={() => onToggleMorning(item.id)}
+            style={{ ...s.agentBtn, borderColor: item.morning ? '#2d5c38' : '#1d2a1a', background: item.morning ? '#1a2b1e' : '#131611', color: item.morning ? '#7dd4a8' : '#4a6a54', marginBottom: 6 }}
+          >
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.morning ? '#5fb89f' : '#2d5c38' }} />
+            {item.morning ? '今日やること ✓' : '今日やることに追加'}
+          </button>
           {canAssignAgent && (
             <button onClick={() => onAssignToAgent(item.id)} style={s.agentBtn}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3fb6a8' }} />
