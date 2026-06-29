@@ -380,6 +380,17 @@ export default function App() {
     setItems(updated); persist(updated, changed);
   }
 
+  function editCtx(id: string, ctx: WorkItem['ctx']) {
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== id) return i;
+      changed = { ...i, ctx };
+      return changed;
+    });
+    setItems(updated); persist(updated, changed);
+    flash(`${id} コンテキストを更新しました`);
+  }
+
   function updateAuditFields(id: string, patch: { auditRequired?: boolean; reviewer?: string; deviationRisk?: DeviationRisk; driftNote?: string }) {
     let changed: WorkItem | undefined;
     const updated = items.map(i => {
@@ -608,6 +619,7 @@ export default function App() {
           onLinkGitHub={linkGitHub}
           onToggleMorning={toggleMorning}
           onUpdateAudit={updateAuditFields}
+          onEditCtx={editCtx}
           onGoCtx={() => { nav('context'); }}
           onGoCtxById={goCtxById}
           onGoHand={() => { nav('handoff'); }}

@@ -53,6 +53,7 @@ interface WorkItemDrawerProps {
   onLinkGitHub: (wiId: string, url: string) => void;
   onToggleMorning: (wiId: string) => void;
   onUpdateAudit: (wiId: string, patch: { auditRequired?: boolean; reviewer?: string; deviationRisk?: DeviationRisk; driftNote?: string }) => void;
+  onEditCtx: (wiId: string, ctx: WorkItem['ctx']) => void;
   onGoCtx: () => void;
   onGoCtxById: (id: string) => void;
   onGoHand: () => void;
@@ -60,9 +61,11 @@ interface WorkItemDrawerProps {
   onGoGate: () => void;
 }
 
-export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onToggleMorning, onUpdateAudit, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onToggleMorning, onUpdateAudit, onEditCtx, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
+  const [ctxEditing, setCtxEditing] = useState(false);
+  const [ctxDraft, setCtxDraft] = useState(item.ctx);
   const [events, setEvents] = useState<WorkEvent[]>([]);
   const [ghInput, setGhInput] = useState('');
 
@@ -71,6 +74,11 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
       onLoadEvents(item.id).then(setEvents).catch(() => setEvents([]));
     }
   }, [tab, item.id]);
+
+  useEffect(() => {
+    setCtxDraft(item.ctx);
+    setCtxEditing(false);
+  }, [item.id]);
 
   const canAiRun = isAiActor(item.assignee) && (item.col === 'inbox' || item.col === 'ai');
   const canAssignAgent = isAiActor(item.assignee) && item.col === 'inbox';
@@ -185,15 +193,34 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
         <div style={s.tabContent}>
           {tab === 'context' && (
             <div style={s.stack}>
-              <Field label={t.flQuestion} value={item.ctx.question} />
-              <Field label={t.flPurpose} value={item.ctx.purpose} />
-              {item.ctx.context && <Field label={t.flContext} value={item.ctx.context} />}
-              <Box bg="#1d1b14" border="#34301f" label={t.flConstraint} labelColor="#d9a93f" value={item.ctx.constraint} valueColor="#e3d2a6" />
-              <Field label={t.flUnresolved} value={item.ctx.unresolved} />
-              {hasCtx
-                ? <button onClick={() => onGoCtxById(item.contextId)} style={s.linkBtn}>{t.goCtxCard}</button>
-                : <button onClick={onGoCtx} style={s.linkBtn}>{t.openCtxFull}</button>
-              }
+              {ctxEditing ? (
+                <>
+                  <CtxTextarea label={t.flQuestion} value={ctxDraft.question} onChange={v => setCtxDraft(d => ({ ...d, question: v }))} rows={3} />
+                  <CtxTextarea label={t.flPurpose} value={ctxDraft.purpose} onChange={v => setCtxDraft(d => ({ ...d, purpose: v }))} rows={2} />
+                  <CtxTextarea label={t.flContext} value={ctxDraft.context ?? ''} onChange={v => setCtxDraft(d => ({ ...d, context: v }))} rows={2} />
+                  <CtxTextarea label={t.flConstraint} value={ctxDraft.constraint} onChange={v => setCtxDraft(d => ({ ...d, constraint: v }))} labelColor="#d9a93f" rows={2} />
+                  <CtxTextarea label={t.flUnresolved} value={ctxDraft.unresolved} onChange={v => setCtxDraft(d => ({ ...d, unresolved: v }))} rows={2} />
+                  <div style={{ display: 'flex', gap: 7 }}>
+                    <button onClick={() => { onEditCtx(item.id, ctxDraft); setCtxEditing(false); }} style={s.saveBtn}>{t.btnSave}</button>
+                    <button onClick={() => { setCtxDraft(item.ctx); setCtxEditing(false); }} style={s.cancelEditBtn}>{t.btnCancel}</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setCtxDraft(item.ctx); setCtxEditing(true); }} style={s.iconBtn} title="ctx を編集">✏</button>
+                  </div>
+                  <Field label={t.flQuestion} value={item.ctx.question} />
+                  <Field label={t.flPurpose} value={item.ctx.purpose} />
+                  {item.ctx.context && <Field label={t.flContext} value={item.ctx.context} />}
+                  <Box bg="#1d1b14" border="#34301f" label={t.flConstraint} labelColor="#d9a93f" value={item.ctx.constraint} valueColor="#e3d2a6" />
+                  <Field label={t.flUnresolved} value={item.ctx.unresolved} />
+                  {hasCtx
+                    ? <button onClick={() => onGoCtxById(item.contextId)} style={s.linkBtn}>{t.goCtxCard}</button>
+                    : <button onClick={onGoCtx} style={s.linkBtn}>{t.openCtxFull}</button>
+                  }
+                </>
+              )}
             </div>
           )}
           {tab === 'handoff' && (
@@ -450,6 +477,20 @@ function GitHubLinksSection({ links, ghInput, onGhInput, onLink }: {
           padding: '6px 10px', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
         }}>Link</button>
       </div>
+    </div>
+  );
+}
+
+function CtxTextarea({ label, value, onChange, rows = 2, labelColor = '#6a7078' }: { label: string; value: string; onChange: (v: string) => void; rows?: number; labelColor?: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: labelColor, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 5 }}>{label}</div>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        rows={rows}
+        style={{ width: '100%', background: '#1b1e25', border: '1px solid #3a4556', borderRadius: 7, color: '#e0e3e8', fontSize: 12.5, lineHeight: 1.6, padding: '7px 10px', fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+      />
     </div>
   );
 }
