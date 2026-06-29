@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile, GitHubLink } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile, GitHubLink, DeviationRisk } from '../types';
 
 let _db: Database | null = null;
 
@@ -26,8 +26,10 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
         gate, rde, morning, bounced, gate_perm, gate_stops,
         ctx_json, ho_json, ev_json, rde_audit_json,
         agent_picked_up_at, agent_escalated, escalation_reason,
-        github_links_json, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,datetime('now'))
+        github_links_json,
+        audit_required, reviewer, deviation_risk, drift_note,
+        updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        title=$2, domain=$3, assignee=$4, col=$5, status=$6, risk=$7,
        context_id=$8, next_action=$9, gate=$10, rde=$11, morning=$12, bounced=$13,
@@ -35,6 +37,7 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
        rde_audit_json=$19,
        agent_picked_up_at=$20, agent_escalated=$21, escalation_reason=$22,
        github_links_json=$23,
+       audit_required=$24, reviewer=$25, deviation_risk=$26, drift_note=$27,
        updated_at=datetime('now')`,
     [
       item.id, item.title, item.domain, item.assignee, item.col, item.status,
@@ -47,6 +50,10 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
       item.agentEscalated ? 1 : 0,
       item.escalationReason ?? '',
       JSON.stringify(item.githubLinks ?? []),
+      item.auditRequired ? 1 : 0,
+      item.reviewer ?? '',
+      item.deviationRisk ?? 'low',
+      item.driftNote ?? '',
     ],
   );
 }
@@ -247,6 +254,10 @@ function rowToItem(r: Record<string, unknown>): WorkItem {
     escalationReason: r.escalation_reason as string | undefined || undefined,
     githubLinks: r.github_links_json ? (JSON.parse(r.github_links_json as string) as GitHubLink[]) : [],
     updatedAt: r.updated_at as string | undefined || undefined,
+    auditRequired: Boolean(r.audit_required),
+    reviewer: r.reviewer as string | undefined || undefined,
+    deviationRisk: (r.deviation_risk as DeviationRisk | undefined) ?? 'low',
+    driftNote: r.drift_note as string | undefined || undefined,
   };
 }
 

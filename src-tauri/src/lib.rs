@@ -199,6 +199,17 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "add_audit_fields_to_work_items",
+            sql: "
+                ALTER TABLE work_items ADD COLUMN audit_required INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE work_items ADD COLUMN reviewer TEXT NOT NULL DEFAULT '';
+                ALTER TABLE work_items ADD COLUMN deviation_risk TEXT NOT NULL DEFAULT 'low';
+                ALTER TABLE work_items ADD COLUMN drift_note TEXT NOT NULL DEFAULT '';
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

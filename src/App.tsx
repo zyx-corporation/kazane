@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry, GateRule, AgentProfile, GitHubLink } from './types';
+import type { Screen, BoardCol, Lang, DrawerTab, WorkItem, ContextCard, EnrichedWorkItem, HandoffNote, EventType, EvidenceLogEntry, GateRule, AgentProfile, GitHubLink, DeviationRisk } from './types';
 import { enrichItem, COL_NAMES, isAiActor, DOMAIN_TEMPLATES } from './types';
 import { getT } from './i18n';
 import { dbListItems, dbUpsertItem, dbDeleteItem, dbListContextCards, dbUpsertContextCard, dbListHandoffs, dbUpsertHandoff, dbAddEvent, dbListEvents, dbListEvidenceLog, dbAddEvidenceEntry, dbListGateRules, dbListAgentProfiles } from './db';
@@ -380,6 +380,16 @@ export default function App() {
     setItems(updated); persist(updated, changed);
   }
 
+  function updateAuditFields(id: string, patch: { auditRequired?: boolean; reviewer?: string; deviationRisk?: DeviationRisk; driftNote?: string }) {
+    let changed: WorkItem | undefined;
+    const updated = items.map(i => {
+      if (i.id !== id) return i;
+      changed = { ...i, ...patch };
+      return changed;
+    });
+    setItems(updated); persist(updated, changed);
+  }
+
   function submitForm() {
     if (!form.title.trim()) { flash(t.toastNeedTitle); return; }
     addItem({ title: form.title.trim(), domain: form.domain, assignee: form.assignee });
@@ -569,11 +579,12 @@ export default function App() {
             <EscalationGate gateRules={gateRules} agentProfiles={agentProfiles} gateDomain={gateDomain} t={t} items={enriched} onSetGateDomain={setGateDomain} />
           )}
           {screen === 'rde' && (
-            <RdeEvidenceAudit evidenceLog={evidenceLog} t={t}
+            <RdeEvidenceAudit evidenceLog={evidenceLog} items={enriched} t={t}
               onPromoteRde={() => promoteUnresolved('業務領域別テンプレート', '調査', 'CTX-002')}
               onGoCtx={() => nav('context')}
               onExport={exportItems}
               onAddEvidence={addEvidence}
+              onOpenItem={openItem}
             />
           )}
         </div>
@@ -583,6 +594,7 @@ export default function App() {
       {selItem && (
         <WorkItemDrawer
           item={selItem} tab={tab} t={t}
+          wiEvidenceLog={evidenceLog.filter(e => e.wiId === selItem.id)}
           onClose={closeDrawer}
           onSetTab={setTab}
           onMoveItem={moveItem}
@@ -595,6 +607,7 @@ export default function App() {
           onLoadEvents={id => IS_TAURI && dbReady ? dbListEvents(id) : Promise.resolve([])}
           onLinkGitHub={linkGitHub}
           onToggleMorning={toggleMorning}
+          onUpdateAudit={updateAuditFields}
           onGoCtx={() => { nav('context'); }}
           onGoCtxById={goCtxById}
           onGoHand={() => { nav('handoff'); }}

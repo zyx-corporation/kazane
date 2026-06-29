@@ -16,6 +16,7 @@ export function EscalationGate({ gateRules, agentProfiles, gateDomain, t, items,
   for (const it of items) { domainCounts[it.domain] = (domainCounts[it.domain] ?? 0) + 1; }
   const chips = [{ key: 'all', label: t.chipAll }, ...gateRules.map(r => ({ key: r.domain, label: r.domain }))];
   const filtered = gateDomain === 'all' ? gateRules : gateRules.filter(r => r.domain === gateDomain);
+  const auditRequired = items.filter(i => i.auditRequired && i.col !== 'done');
 
   return (
     <section style={s.page}>
@@ -95,6 +96,18 @@ export function EscalationGate({ gateRules, agentProfiles, gateDomain, t, items,
               <div key={i} style={s.stopTemplate}>{st}</div>
             ))}
           </Panel>
+
+          {auditRequired.length > 0 && (
+            <Panel title={`監査必須 (${auditRequired.length})`}>
+              {auditRequired.map(it => (
+                <div key={it.id} style={{ border: '1px solid #322c47', background: '#1d1a29', borderRadius: 8, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#b6a6ee', marginBottom: 2 }}>{it.id}</div>
+                  <div style={{ fontSize: 11.5, color: '#dfe3e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                  {it.reviewer && <div style={{ fontSize: 10, color: '#7e8590', marginTop: 3 }}>担当: {it.reviewer}</div>}
+                </div>
+              ))}
+            </Panel>
+          )}
 
           <Panel title={t.agentProfilesHd}>
             {agentProfiles.map(ap => (

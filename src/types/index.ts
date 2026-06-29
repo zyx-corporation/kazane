@@ -4,6 +4,7 @@ export type Lang = 'ja' | 'en' | 'zh';
 export type DrawerTab = 'context' | 'handoff' | 'evidence' | 'rde' | 'gate' | 'timeline';
 export type Risk = '高' | '中' | '低';
 export type TrustLevel = '高' | '中' | '低';
+export type DeviationRisk = 'low' | 'medium' | 'high';
 
 export interface EvidenceEntry {
   type: string;
@@ -78,6 +79,11 @@ export interface WorkItem {
   githubLinks?: GitHubLink[];
   // v0.5: staleness
   updatedAt?: string;
+  // v0.6: audit chain
+  auditRequired?: boolean;
+  reviewer?: string;
+  deviationRisk?: DeviationRisk;
+  driftNote?: string;
 }
 
 export interface EnrichedWorkItem extends WorkItem {

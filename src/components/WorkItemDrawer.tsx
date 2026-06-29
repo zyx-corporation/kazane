@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { EnrichedWorkItem, DrawerTab, BoardCol, WorkItem, WorkEvent, GitHubLink } from '../types';
+import type { EnrichedWorkItem, DrawerTab, BoardCol, WorkItem, WorkEvent, GitHubLink, EvidenceLogEntry, DeviationRisk } from '../types';
 import { trustColor, isAiActor, DOMAIN_COLORS, AI_ACTORS } from '../types';
 import type { Translations } from '../i18n';
 
@@ -39,6 +39,7 @@ interface WorkItemDrawerProps {
   item: EnrichedWorkItem;
   tab: DrawerTab;
   t: Translations;
+  wiEvidenceLog: EvidenceLogEntry[];
   onClose: () => void;
   onSetTab: (t: DrawerTab) => void;
   onMoveItem: (id: string, col: BoardCol) => void;
@@ -51,6 +52,7 @@ interface WorkItemDrawerProps {
   onLoadEvents: (wiId: string) => Promise<WorkEvent[]>;
   onLinkGitHub: (wiId: string, url: string) => void;
   onToggleMorning: (wiId: string) => void;
+  onUpdateAudit: (wiId: string, patch: { auditRequired?: boolean; reviewer?: string; deviationRisk?: DeviationRisk; driftNote?: string }) => void;
   onGoCtx: () => void;
   onGoCtxById: (id: string) => void;
   onGoHand: () => void;
@@ -58,7 +60,7 @@ interface WorkItemDrawerProps {
   onGoGate: () => void;
 }
 
-export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onToggleMorning, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
+export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onToggleMorning, onUpdateAudit, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
   const [events, setEvents] = useState<WorkEvent[]>([]);
@@ -205,15 +207,26 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
           )}
           {tab === 'evidence' && (
             <div style={s.stack}>
-              <div style={{ fontSize: 10.5, color: '#6a7078', marginBottom: 2 }}>{t.evRefHd}</div>
-              {ev.length === 0 && <div style={{ fontSize: 12, color: '#4a5268' }}>—</div>}
+              <div style={{ fontSize: 10.5, color: '#6a7078', marginBottom: 2, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>証跡チェーン — {ev.length + wiEvidenceLog.length} 件</div>
+              {ev.length === 0 && wiEvidenceLog.length === 0 && <div style={{ fontSize: 12, color: '#4a5268' }}>—</div>}
               {ev.map((e, i) => (
-                <div key={i} style={{ border: '1px solid #262a33', background: '#16191f', borderRadius: 9, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <div>
+                <div key={`ev-${i}`} style={{ border: '1px solid #262a33', background: '#16191f', borderRadius: 9, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, color: '#dfe3e8' }}>{e.label}</div>
                     <div style={{ fontSize: 9.5, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", marginTop: 3 }}>{e.type}</div>
                   </div>
                   <span style={{ fontSize: 9.5, color: e.trustColor, whiteSpace: 'nowrap' }}>{t.trust} {e.trust}</span>
+                </div>
+              ))}
+              {wiEvidenceLog.map((e) => (
+                <div key={e.id} style={{ border: '1px solid #243339', background: '#131c1f', borderRadius: 9, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 9.5, color: '#9fb6c2', background: '#161e22', border: '1px solid #243339', padding: '2px 7px', borderRadius: 5 }}>{e.type}</span>
+                    <span style={{ fontSize: 9.5, color: trustColor(e.trust), whiteSpace: 'nowrap' }}>{t.trust} {e.trust}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#dfe3e8', marginTop: 7 }}>{e.label}</div>
+                  {e.store && <div style={{ fontSize: 10, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", marginTop: 3 }}>{e.store}</div>}
+                  <div style={{ fontSize: 9, color: '#4a5268', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>{new Date(e.createdAt).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
               ))}
               <GitHubLinksSection
@@ -226,6 +239,49 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
           )}
           {tab === 'rde' && (
             <div style={s.stack}>
+              {/* 監査フラグ + レビュー担当 */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => onUpdateAudit(item.id, { auditRequired: !item.auditRequired })}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${item.auditRequired ? '#5848a0' : '#2d323d'}`, background: item.auditRequired ? '#1d1a29' : '#131611', color: item.auditRequired ? '#b6a6ee' : '#6a7078', padding: '6px 11px', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.auditRequired ? '#b6a6ee' : '#4a5268' }} />
+                  {item.auditRequired ? '監査必須 ✓' : '監査必須にする'}
+                </button>
+                <input
+                  value={item.reviewer ?? ''}
+                  onChange={e => onUpdateAudit(item.id, { reviewer: e.target.value })}
+                  placeholder="レビュー担当者"
+                  style={{ flex: 1, minWidth: 100, background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 7, color: '#c8cdd5', fontSize: 11.5, padding: '6px 9px', fontFamily: 'inherit', outline: 'none' }}
+                />
+              </div>
+              {/* 意味的ドリフトリスク */}
+              <div>
+                <div style={{ fontSize: 10, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>DEVIATION RISK</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['low', 'medium', 'high'] as const).map(r => {
+                    const active = (item.deviationRisk ?? 'low') === r;
+                    const col = r === 'high' ? '#d96b6b' : r === 'medium' ? '#d9a93f' : '#5fb89f';
+                    return (
+                      <button key={r} onClick={() => onUpdateAudit(item.id, { deviationRisk: r })} style={{ flex: 1, border: `1px solid ${active ? col : '#2d323d'}`, background: active ? col + '22' : '#131611', color: active ? col : '#6a7078', padding: '5px 0', borderRadius: 6, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        {r === 'low' ? '低' : r === 'medium' ? '中' : '高'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Drift note */}
+              <div>
+                <div style={{ fontSize: 10, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>DRIFT NOTE</div>
+                <textarea
+                  value={item.driftNote ?? ''}
+                  onChange={e => onUpdateAudit(item.id, { driftNote: e.target.value })}
+                  placeholder="意味的ドリフト・逸脱リスクの記録…"
+                  rows={3}
+                  style={{ width: '100%', background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 7, color: '#c8cdd5', fontSize: 11.5, padding: '8px 10px', fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+              </div>
+              {/* RDE Audit結果 */}
               {hasRde ? (
                 <>
                   <Box bg="#161d18" border="#25382b" label={t.rdeKept} labelColor="#5fb89f" value={item.rdeAudit!.kept} valueColor="#cfe0d6" />
@@ -234,9 +290,9 @@ export function WorkItemDrawer({ item, tab, t, onClose, onSetTab, onMoveItem, on
                   <button onClick={onGoRde} style={{ ...s.linkBtn, border: '1px solid #322c47', background: '#1d1a29', color: '#b6a6ee' }}>{t.openRdeFull}</button>
                 </>
               ) : (
-                <div style={{ textAlign: 'center', padding: '30px 10px', color: '#6a7078' }}>
-                  <div style={{ fontSize: 12.5, marginBottom: 14 }}>{t.noRdeMsg}</div>
-                  <button onClick={onGoRde} style={{ border: '1px solid #322c47', background: '#1d1a29', color: '#b6a6ee', padding: '8px 14px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{t.sendToRde}</button>
+                <div style={{ textAlign: 'center', padding: '16px 10px', color: '#6a7078' }}>
+                  <div style={{ fontSize: 12, marginBottom: 10 }}>{t.noRdeMsg}</div>
+                  <button onClick={onGoRde} style={{ border: '1px solid #322c47', background: '#1d1a29', color: '#b6a6ee', padding: '7px 14px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }}>{t.sendToRde}</button>
                 </div>
               )}
             </div>

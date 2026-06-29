@@ -1,18 +1,23 @@
 import { useState } from 'react';
-import type { EvidenceLogEntry } from '../types';
+import type { EvidenceLogEntry, EnrichedWorkItem } from '../types';
 import { trustColor } from '../types';
 import type { Translations } from '../i18n';
 
 interface RdeEvidenceAuditProps {
   evidenceLog: EvidenceLogEntry[];
+  items: EnrichedWorkItem[];
   t: Translations;
   onPromoteRde: () => void;
   onGoCtx: () => void;
   onExport: () => void;
   onAddEvidence: (ev: { type: string; label: string; trust: EvidenceLogEntry['trust']; store: string }) => void;
+  onOpenItem: (id: string) => void;
 }
 
-export function RdeEvidenceAudit({ evidenceLog, t, onPromoteRde, onGoCtx, onExport, onAddEvidence }: RdeEvidenceAuditProps) {
+export function RdeEvidenceAudit({ evidenceLog, items, t, onPromoteRde, onGoCtx, onExport, onAddEvidence, onOpenItem }: RdeEvidenceAuditProps) {
+  const auditItems = items.filter(i => i.auditRequired || i.rde || i.deviationRisk === 'high' || i.deviationRisk === 'medium');
+  const driftCounts = { low: 0, medium: 0, high: 0 };
+  for (const i of items) { const r = i.deviationRisk ?? 'low'; driftCounts[r]++; }
   const [addOpen, setAddOpen] = useState(false);
   const [newEv, setNewEv] = useState({ type: 'ファイル', label: '', trust: '中' as EvidenceLogEntry['trust'], store: '' });
   const rdeRows = [
@@ -50,10 +55,54 @@ export function RdeEvidenceAudit({ evidenceLog, t, onPromoteRde, onGoCtx, onExpo
           </div>
 
           <div style={{ paddingTop: 14, borderTop: '1px solid #2c2540', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button style={s.primaryBtn}>{t.btnRunRdeAudit}</button>
             <button onClick={onPromoteRde} style={s.warnBtn}>{t.btnPromoteUnresolved}</button>
             <button onClick={onGoCtx} style={s.secondaryBtn}>{t.btnUpdCtxCard}</button>
             <button onClick={onExport} style={s.secondaryBtn}>{t.btnExportReport}</button>
+          </div>
+        </div>
+
+        {/* Drift score summary + audit WI list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Drift counts */}
+          <div style={{ border: '1px solid #262a33', background: '#1a1d24', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#d3d8df', marginBottom: 12 }}>Deviation Risk サマリ</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {([['high', '#d96b6b', '高リスク'], ['medium', '#d9a93f', '中リスク'], ['low', '#5fb89f', '低リスク']] as const).map(([key, col, label]) => (
+                <div key={key} style={{ flex: 1, border: `1px solid ${col}22`, background: col + '11', borderRadius: 9, padding: '10px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: col, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>{driftCounts[key]}</div>
+                  <div style={{ fontSize: 10, color: col, marginTop: 4 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Audit WI list */}
+          <div style={{ border: '1px solid #262a33', background: '#1a1d24', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#d3d8df', marginBottom: 10 }}>
+              監査対象 WI
+              <span style={{ fontSize: 10, color: '#6a7078', marginLeft: 8, fontFamily: "'JetBrains Mono', monospace" }}>{auditItems.length} 件</span>
+            </div>
+            {auditItems.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#4a5268', textAlign: 'center', padding: '10px 0' }}>—</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {auditItems.map(it => {
+                  const drCol = it.deviationRisk === 'high' ? '#d96b6b' : it.deviationRisk === 'medium' ? '#d9a93f' : '#5fb89f';
+                  return (
+                    <div key={it.id} onClick={() => onOpenItem(it.id)} style={{ border: '1px solid #262a33', background: '#16191f', borderRadius: 8, padding: '9px 11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: it.dc, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11.5, color: '#dfe3e8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                          {it.auditRequired && <span style={{ fontSize: 9, color: '#b6a6ee', border: '1px solid #322c47', padding: '1px 5px', borderRadius: 4 }}>監査必須</span>}
+                          {it.reviewer && <span style={{ fontSize: 9, color: '#9aa1ad', fontFamily: "'JetBrains Mono', monospace" }}>{it.reviewer}</span>}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 9.5, color: drCol, flexShrink: 0, fontFamily: "'JetBrains Mono', monospace" }}>{it.deviationRisk ?? 'low'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -109,7 +158,7 @@ const s: Record<string, React.CSSProperties> = {
   page: { padding: '26px 28px 40px' },
   h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#e6e8ec' },
   sub: { margin: '6px 0 0', color: '#8b919c', fontSize: 13 },
-  layout: { marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 340px', gap: 18, alignItems: 'start' },
+  layout: { marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 280px 280px', gap: 18, alignItems: 'start' },
   rdePanel: { border: '1px solid #2c2540', background: '#181620', borderRadius: 12, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 },
   rdeTitle: { margin: 0, fontSize: 16, fontWeight: 700, color: '#e6e8ec' },
   mono: { fontSize: 10, color: '#7e8590', fontFamily: "'JetBrains Mono', monospace" },
