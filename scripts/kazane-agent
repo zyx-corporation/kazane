@@ -11,6 +11,7 @@
 #   kazane-agent read <WI-ID>                  — print full Work Item as JSON
 #   kazane-agent create --title <title> [opts] — create a new Work Item in SQLite
 #   kazane-agent update <WI-ID> [opts]         — patch fields on an existing Work Item
+#   kazane-agent report-test --tool <tool> [opts] — record test result as Evidence Log entry
 #   kazane-agent submit <WI-ID>                — submit a completed handoff
 #   kazane-agent submit <WI-ID> --escalate "reason"  — submit with escalation
 #   kazane-agent auto                          — auto-process all pending tasks (demo)
@@ -30,6 +31,12 @@
 #   --assignee <text>                New assignee
 #   --risk 低|中|高                   New risk level
 #   --next <text>                    New next action
+#
+# report-test options:
+#   --tool tsc|cargo-check|cargo-test|vite-build|custom   Tool name (required)
+#   --result pass|fail                                     Test outcome (default: pass)
+#   --wi <WI-ID>                                          Link to Work Item
+#   --note <text>                                         Extra context (e.g. "0 errors, 12 files")
 #
 # Directory locations (macOS):
 #   Tasks:    ~/Library/Application Support/jp.zyxcorp.kazane/tasks/
@@ -430,6 +437,66 @@ for col in COL_ORDER:
         risk_mark = "!" if r["risk"]=="高" else "·"
         print(f"    {risk_mark} {r['id']:8s}  [{r['domain']:6s}] {r['title'][:60]}")
     print()
+con.close()
+PYEOF
+    ;;
+
+  report-test)
+    rt_tool=""
+    rt_result="pass"
+    rt_wi=""
+    rt_note=""
+
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --tool)   rt_tool="$2";   shift 2 ;;
+        --result) rt_result="$2"; shift 2 ;;
+        --wi)     rt_wi="$2";     shift 2 ;;
+        --note)   rt_note="$2";   shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ -z "$rt_tool" ]; then
+      echo "Usage: kazane-agent report-test --tool <tsc|cargo-check|cargo-test|vite-build|custom> [--result pass|fail] [--wi <WI-ID>] [--note <text>]" >&2
+      exit 1
+    fi
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2; exit 1
+    fi
+
+    python3 - "$DB_PATH" "$rt_tool" "$rt_result" "$rt_wi" "$rt_note" <<'PYEOF'
+import sqlite3, json, sys, datetime, uuid
+
+db_path, tool, result, wi_id, note = sys.argv[1:6]
+
+trust = "高" if result == "pass" else "低"
+outcome = "✓ pass" if result == "pass" else "✗ fail"
+label = f"{tool}: {outcome}"
+ev_id = "EV-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+# Try to get current git SHA for store reference
+import subprocess
+try:
+    sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
+    store = f"local:git:{sha}"
+except Exception:
+    store = "local"
+
+con = sqlite3.connect(db_path)
+con.execute(
+    """INSERT OR IGNORE INTO evidence_log
+       (id, type, label, trust, store, wi_id, ho_id, ctx_id, note, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+    (ev_id, tool, label, trust, store, wi_id or "", "", "", note or "", now),
+)
+con.commit()
+print(f"Evidence recorded: {ev_id}")
+print(f"  tool={tool}  result={result}  trust={trust}")
+if wi_id: print(f"  linked to: {wi_id}")
+print(f"  store: {store}")
 con.close()
 PYEOF
     ;;
