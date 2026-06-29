@@ -170,6 +170,12 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.actorColor }} />{item.assignee}
                 </span>
                 <span style={{ fontSize: 10, color: item.colColor, border: `1px solid ${item.colColor}`, padding: '2px 9px', borderRadius: 20 }}>{item.status}</span>
+                {item.source === 'gmail' && (
+                  <span style={{ fontSize: 10, color: '#8abfe0', background: '#151e28', border: '1px solid #243349', padding: '2px 9px', borderRadius: 20 }}>メール</span>
+                )}
+                {item.source === 'calendar' && (
+                  <span style={{ fontSize: 10, color: '#7ec9a4', background: '#151f1b', border: '1px solid #244035', padding: '2px 9px', borderRadius: 20 }}>予定</span>
+                )}
               </div>
             </>
           )}

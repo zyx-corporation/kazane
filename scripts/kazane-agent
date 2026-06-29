@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
-# kazane-agent — Agent CLI for Kazane Work OS (v0.4 michi)
+# kazane-agent — Agent CLI for Kazane Work OS (v0.7 musubi)
 #
 # Reads Work Items from the Kazane task queue and writes back Handoff Notes.
 # Kazane polls the handoffs directory every 10s and auto-imports results.
 #
 # Usage:
-#   kazane-agent list                          — list pending tasks
-#   kazane-agent pickup                        — print task JSON for each pending item
-#   kazane-agent status                        — project overview (all items by column)
-#   kazane-agent read <WI-ID>                  — print full Work Item as JSON
-#   kazane-agent create --title <title> [opts] — create a new Work Item in SQLite
-#   kazane-agent update <WI-ID> [opts]         — patch fields on an existing Work Item
+#   kazane-agent list                           — list pending tasks
+#   kazane-agent pickup                         — print task JSON for each pending item
+#   kazane-agent status                         — project overview (all items by column)
+#   kazane-agent read <WI-ID>                   — print full Work Item as JSON
+#   kazane-agent create --title <title> [opts]  — create a new Work Item in SQLite
+#   kazane-agent update <WI-ID> [opts]          — patch fields on an existing Work Item
 #   kazane-agent report-test --tool <tool> [opts] — record test result as Evidence Log entry
-#   kazane-agent submit <WI-ID>                — submit a completed handoff
-#   kazane-agent submit <WI-ID> --escalate "reason"  — submit with escalation
-#   kazane-agent auto                          — auto-process all pending tasks (demo)
-#   kazane-agent dirs                          — print task/handoff directory paths
+#   kazane-agent submit <WI-ID>                 — submit a completed handoff
+#   kazane-agent submit <WI-ID> --escalate "reason" — submit with escalation
+#   kazane-agent auto                           — auto-process all pending tasks (demo)
+#   kazane-agent dirs                           — print task/handoff directory paths
+#   kazane-agent mail-import [opts]             — import a Gmail thread as a Work Item
+#   kazane-agent calendar-import [opts]         — import a calendar event as a Work Item
+#   kazane-agent banto-demo                     — print AI番頭 demo flow guide
 #
 # create options:
 #   --title <text>       Work item title (required)
@@ -37,6 +40,24 @@
 #   --result pass|fail                                     Test outcome (default: pass)
 #   --wi <WI-ID>                                          Link to Work Item
 #   --note <text>                                         Extra context (e.g. "0 errors, 12 files")
+#
+# mail-import options:
+#   --from <email>       Sender address (required)
+#   --subject <text>     Email subject (required)
+#   --snippet <text>     Email body snippet
+#   --thread-id <id>     Gmail thread ID (used as sourceRef)
+#   --domain <text>      Domain (default: 顧客対応)
+#   --ctx <CTX-ID>       Context Card ID to link
+#   --risk 低|中|高       Risk level (default: 中)
+#
+# calendar-import options:
+#   --title <text>       Event title (required)
+#   --date <datetime>    Event start (ISO 8601)
+#   --attendees <text>   Comma-separated attendees
+#   --event-id <id>      Calendar event ID (used as sourceRef)
+#   --domain <text>      Domain (default: 会議)
+#   --ctx <CTX-ID>       Context Card ID to link
+#   --wi <WI-ID>         Existing Work Item to annotate (instead of creating new)
 #
 # Directory locations (macOS):
 #   Tasks:    ~/Library/Application Support/jp.zyxcorp.kazane/tasks/
@@ -499,6 +520,233 @@ if wi_id: print(f"  linked to: {wi_id}")
 print(f"  store: {store}")
 con.close()
 PYEOF
+    ;;
+
+  mail-import)
+    mi_from="" mi_subject="" mi_snippet="" mi_thread_id=""
+    mi_domain="顧客対応" mi_ctx="—" mi_risk="中"
+
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --from)      mi_from="$2";      shift 2 ;;
+        --subject)   mi_subject="$2";   shift 2 ;;
+        --snippet)   mi_snippet="$2";   shift 2 ;;
+        --thread-id) mi_thread_id="$2"; shift 2 ;;
+        --domain)    mi_domain="$2";    shift 2 ;;
+        --ctx)       mi_ctx="$2";       shift 2 ;;
+        --risk)      mi_risk="$2";      shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ -z "$mi_from" ] || [ -z "$mi_subject" ]; then
+      echo "Usage: kazane-agent mail-import --from <email> --subject <text> [--snippet <text>] [--thread-id <id>] [--domain <domain>] [--ctx <CTX-ID>] [--risk 低|中|高]" >&2
+      exit 1
+    fi
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2; exit 1
+    fi
+
+    python3 - "$DB_PATH" "$mi_from" "$mi_subject" "$mi_snippet" "$mi_thread_id" "$mi_domain" "$mi_ctx" "$mi_risk" <<'PYEOF'
+import sqlite3, json, sys, datetime
+
+db_path, from_addr, subject, snippet, thread_id, domain, ctx_id, risk = sys.argv[1:9]
+
+title = f"[メール] {subject}"
+now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+ctx_json = json.dumps({
+    "question": f"差出人 {from_addr} からの問い合わせの背景と期待値は何か。",
+    "purpose": "顧客の課題を把握し、適切に対応する。",
+    "constraint": "送信・価格・謝罪はTomoyukiが判断。",
+    "unresolved": snippet[:200] if snippet else "本文を確認のこと。",
+})
+ho_json = json.dumps({
+    "did": "未着手。メールを受信し、Work Itemとして記録した。",
+    "uncertain": "回答内容の最終承認。", "bounce": "—",
+    "next": "担当が内容を確認し、返信案を作成する。",
+})
+
+con = sqlite3.connect(db_path)
+try:
+    rows = con.execute("SELECT id FROM work_items WHERE id LIKE 'WI-%'").fetchall()
+    nums = [int(r[0].replace("WI-", "")) for r in rows if r[0].replace("WI-", "").isdigit()]
+    wi_id = f"WI-{max(nums, default=0) + 1:03d}"
+
+    con.execute(
+        """INSERT INTO work_items
+           (id, title, domain, assignee, col, status, risk, context_id, next_action,
+            gate, rde, morning, bounced, gate_perm, gate_stops,
+            ctx_json, ho_json, ev_json, github_links_json,
+            source, source_ref, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?,?,?)""",
+        (wi_id, title, domain, "AI番頭", "inbox", "Inbox", risk, ctx_id,
+         f"{from_addr} への返信案を作成する",
+         "AI権限内で返信案作成可",
+         "問い合わせ整理・返信案作成・過去履歴参照",
+         "送信／価格提示／契約条件／謝罪",
+         ctx_json, ho_json,
+         "gmail", thread_id or "",
+         now, now),
+    )
+    con.commit()
+    print(f"Created: {wi_id} — {title}")
+    print(f"  source=gmail  from={from_addr}  domain={domain}")
+    if thread_id: print(f"  thread_id={thread_id}")
+    print(f"  DB: {db_path}")
+finally:
+    con.close()
+PYEOF
+    ;;
+
+  calendar-import)
+    ci_title="" ci_date="" ci_attendees="" ci_event_id=""
+    ci_domain="会議" ci_ctx="—" ci_wi=""
+
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --title)     ci_title="$2";     shift 2 ;;
+        --date)      ci_date="$2";      shift 2 ;;
+        --attendees) ci_attendees="$2"; shift 2 ;;
+        --event-id)  ci_event_id="$2";  shift 2 ;;
+        --domain)    ci_domain="$2";    shift 2 ;;
+        --ctx)       ci_ctx="$2";       shift 2 ;;
+        --wi)        ci_wi="$2";        shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ -z "$ci_title" ]; then
+      echo "Usage: kazane-agent calendar-import --title <text> [--date <datetime>] [--attendees <text>] [--event-id <id>] [--domain <domain>] [--ctx <CTX-ID>] [--wi <WI-ID>]" >&2
+      exit 1
+    fi
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2; exit 1
+    fi
+
+    python3 - "$DB_PATH" "$ci_title" "$ci_date" "$ci_attendees" "$ci_event_id" "$ci_domain" "$ci_ctx" "$ci_wi" <<'PYEOF'
+import sqlite3, json, sys, datetime
+
+db_path, title_raw, date_str, attendees, event_id, domain, ctx_id, target_wi = sys.argv[1:9]
+
+wi_title = f"[予定] {title_raw}"
+now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+date_label = date_str[:16].replace("T", " ") if date_str else "未設定"
+att_label = attendees if attendees else "未設定"
+
+ctx_json = json.dumps({
+    "question": f"「{title_raw}」の目的と期待するアウトカムは何か。",
+    "purpose": "会議の内容をKazaneに記録し、フォローアップを管理する。",
+    "constraint": "参加者情報・決定事項はTomoyukiが確認。",
+    "unresolved": f"日時: {date_label} / 参加者: {att_label}",
+})
+ho_json = json.dumps({
+    "did": "未着手。カレンダー予定を受信し、Work Itemとして記録した。",
+    "uncertain": "会議アジェンダ・決定事項。", "bounce": "—",
+    "next": "担当が会議後にメモを記録し、フォローアップWIを作成する。",
+})
+
+con = sqlite3.connect(db_path)
+try:
+    if target_wi:
+        # 既存WIにカレンダー参照を追記
+        ev_id = "EV-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        con.execute(
+            """INSERT OR IGNORE INTO evidence_log
+               (id, type, label, trust, store, wi_id, ho_id, ctx_id, note, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (ev_id, "calendar", f"予定リンク: {title_raw}", "中",
+             f"calendar:{event_id}" if event_id else "calendar",
+             target_wi, "", ctx_id if ctx_id != "—" else "", date_label, now),
+        )
+        con.commit()
+        print(f"Evidence added to {target_wi}: {title_raw}")
+        print(f"  date={date_label}  attendees={att_label}")
+    else:
+        rows = con.execute("SELECT id FROM work_items WHERE id LIKE 'WI-%'").fetchall()
+        nums = [int(r[0].replace("WI-", "")) for r in rows if r[0].replace("WI-", "").isdigit()]
+        wi_id = f"WI-{max(nums, default=0) + 1:03d}"
+
+        con.execute(
+            """INSERT INTO work_items
+               (id, title, domain, assignee, col, status, risk, context_id, next_action,
+                gate, rde, morning, bounced, gate_perm, gate_stops,
+                ctx_json, ho_json, ev_json, github_links_json,
+                source, source_ref, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?,?,?)""",
+            (wi_id, wi_title, domain, "AI番頭", "inbox", "Inbox", "低", ctx_id,
+             "会議後にメモを記録し、フォローアップを整理する",
+             "AI権限内で議事録整理可",
+             "議事録整理・アクション整理・フォローアップWI作成",
+             "決定事項の外部通知／契約合意",
+             ctx_json, ho_json,
+             "calendar", event_id or "",
+             now, now),
+        )
+        con.commit()
+        print(f"Created: {wi_id} — {wi_title}")
+        print(f"  source=calendar  date={date_label}  attendees={att_label}")
+        if event_id: print(f"  event_id={event_id}")
+        print(f"  DB: {db_path}")
+finally:
+    con.close()
+PYEOF
+    ;;
+
+  banto-demo)
+    cat <<'DEMOEOF'
+=== AI番頭 デモフロー (v0.7 musubi/結び) ===
+
+このフローは Claude Code × Kazane で AI番頭を実演します。
+
+─── Step 1: Gmail でメールを確認 ──────────────────────────────────
+Claude Code (MCP) でGmailを検索:
+  mcp__gmail__search_threads  query="未読 from:顧客"
+
+→ スレッドIDを取得して Kazane にインポート:
+  kazane-agent mail-import \
+    --from "customer@example.com" \
+    --subject "Re: 提案書について確認したい件" \
+    --snippet "ご提案書ありがとうございます。いくつか確認…" \
+    --thread-id "18f3abc..." \
+    --ctx CTX-010 \
+    --domain 顧客対応
+
+─── Step 2: 顧客 Context Card を参照 ──────────────────────────────
+  kazane-agent read CTX-010   # 顧客Context（顧客型）を確認
+
+─── Step 3: 返信案を作成 (AI番頭タスク) ───────────────────────────
+作成されたWIを AI Working に移動:
+  kazane-agent update <WI-ID> --col ai --next "返信案を作成し、Handoffに記録する"
+
+Claude Code が内容を読んで返信草稿を作成し、Handoffとして提出:
+  kazane-agent submit <WI-ID>
+
+─── Step 4: Calendar と連携 ─────────────────────────────────────
+Claude Code (MCP) でカレンダーを確認:
+  mcp__calendar__list_events  timeMin=今日  timeMax=今週末
+
+→ 関連予定があれば Kazane にリンク:
+  kazane-agent calendar-import \
+    --title "◯◯社 打合せ" \
+    --date "2026-07-07T14:00:00" \
+    --attendees "customer@example.com" \
+    --wi <WI-ID>
+
+─── Step 5: Kazane で確認 ──────────────────────────────────────
+  kazane-agent status   # Work Board 全体確認
+  kazane-agent read <WI-ID>   # 詳細確認
+
+→ Kazane アプリで Work Board を開くと:
+  - 「メール」バッジ付きのWIが表示される
+  - Evidenceにカレンダー予定がリンク済み
+  - AI番頭が返信案をHandoffに残している
+
+=== デモ完了 ===
+DEMOEOF
     ;;
 
   help|--help|-h)

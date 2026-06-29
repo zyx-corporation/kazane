@@ -15,10 +15,20 @@ interface ContextCardsProps {
 
 export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnresolved, onGoBoard, onGoRde, onAddCtx }: ContextCardsProps) {
   const [query, setQuery] = useState('');
-  const filtered = query.trim()
-    ? contexts.filter(c => c.title.toLowerCase().includes(query.toLowerCase()) || c.question.toLowerCase().includes(query.toLowerCase()) || c.id.toLowerCase().includes(query.toLowerCase()))
-    : contexts;
+  const [typeFilter, setTypeFilter] = useState<'all' | 'general' | 'customer'>('all');
+
+  const filtered = contexts.filter(c => {
+    const matchQuery = !query.trim() ||
+      c.title.toLowerCase().includes(query.toLowerCase()) ||
+      c.question.toLowerCase().includes(query.toLowerCase()) ||
+      c.id.toLowerCase().includes(query.toLowerCase()) ||
+      (c.customerCompany ?? '').toLowerCase().includes(query.toLowerCase());
+    const matchType = typeFilter === 'all' || (c.cardType ?? 'general') === typeFilter;
+    return matchQuery && matchType;
+  });
+
   const sel = contexts.find(c => c.id === ctxSel) ?? contexts[0];
+  const isCustomer = sel?.cardType === 'customer';
 
   return (
     <section style={s.page}>
@@ -34,16 +44,35 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
             placeholder="検索…"
             style={{ background: '#14161b', border: '1px solid #2d323d', borderRadius: 7, color: '#e6e8ec', fontSize: 11.5, padding: '6px 10px', fontFamily: 'inherit', outline: 'none', marginBottom: 4 }}
           />
+          <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
+            {(['all', 'general', 'customer'] as const).map(f => (
+              <button key={f} onClick={() => setTypeFilter(f)} style={{
+                padding: '3px 10px', borderRadius: 6, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit',
+                background: typeFilter === f ? '#1f2330' : '#14161b',
+                border: `1px solid ${typeFilter === f ? '#3a4656' : '#262a33'}`,
+                color: typeFilter === f ? '#9cc0f5' : '#6a7078',
+              }}>
+                {f === 'all' ? '全て' : f === 'general' ? '汎用' : '顧客'}
+              </button>
+            ))}
+          </div>
           {filtered.map(c => {
             const active = c.id === ctxSel;
+            const isCust = c.cardType === 'customer';
             return (
               <button key={c.id} onClick={() => onSelectCtx(c.id)} style={{
                 ...s.listItem,
                 border: `1px solid ${active ? '#3a4656' : '#262a33'}`,
                 background: active ? '#1f2330' : '#1a1d24',
               }}>
-                <span style={s.mono}>{c.id}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={s.mono}>{c.id}</span>
+                  {isCust && <span style={s.custBadge}>顧客</span>}
+                </div>
                 <span style={s.listTitle}>{c.title}</span>
+                {isCust && c.customerCompany && (
+                  <span style={{ fontSize: 10.5, color: '#c5a8f0' }}>{c.customerCompany}</span>
+                )}
                 <span style={s.listQ}>{c.question}</span>
                 <span style={s.unresolvedBadge}>{t.unresolvedShort} {c.unresolved.length}</span>
               </button>
@@ -56,11 +85,33 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
           <div style={s.detail}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div>
-                <span style={s.mono}>{sel.id}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                  <span style={s.mono}>{sel.id}</span>
+                  {isCustomer && <span style={s.custBadgeLg}>顧客 Context</span>}
+                </div>
                 <h2 style={s.detailTitle}>{sel.title}</h2>
+                {isCustomer && sel.customerCompany && (
+                  <div style={{ fontSize: 12, color: '#c5a8f0', marginTop: 2 }}>{sel.customerCompany}</div>
+                )}
               </div>
               <button onClick={onGoRde} style={s.rdeBtn}>{t.sendToRde}</button>
             </div>
+
+            {/* 顧客情報セクション */}
+            {isCustomer && (
+              <div style={s.custInfoBox}>
+                <div style={s.custInfoHd}>顧客情報</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 18px' }}>
+                  {sel.customerContact && <InfoRow label="担当者" value={sel.customerContact} />}
+                  {sel.customerEmail && <InfoRow label="メール" value={sel.customerEmail} isEmail />}
+                  {sel.customerPhone && <InfoRow label="電話" value={sel.customerPhone} />}
+                  {sel.customerRelationship && <InfoRow label="関係性" value={sel.customerRelationship} />}
+                  {!sel.customerContact && !sel.customerEmail && !sel.customerPhone && !sel.customerRelationship && (
+                    <span style={{ gridColumn: '1/-1', fontSize: 11, color: '#5a6070' }}>顧客詳細未登録</span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div style={s.fieldGrid}>
               <FieldBox label={t.flQuestion} value={sel.question} />
@@ -94,7 +145,7 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                 {sel.unresolved.map(u => (
-                  <button key={u} onClick={() => onPromoteUnresolved(u, '調査', sel.id)} style={s.unresolvedChip}>
+                  <button key={u} onClick={() => onPromoteUnresolved(u, isCustomer ? '顧客対応' : '調査', sel.id)} style={s.unresolvedChip}>
                     {u} <span style={{ color: '#7e6e44' }}>＋WI</span>
                   </button>
                 ))}
@@ -124,6 +175,19 @@ function FieldBox({ label, value, valueColor = '#dfe3e8' }: { label: string; val
   );
 }
 
+function InfoRow({ label, value, isEmail }: { label: string; value: string; isEmail?: boolean }) {
+  return (
+    <div>
+      <div style={{ fontSize: 9.5, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", marginBottom: 2 }}>{label}</div>
+      {isEmail ? (
+        <a href={`mailto:${value}`} style={{ fontSize: 12, color: '#9cc0f5', textDecoration: 'none' }}>{value}</a>
+      ) : (
+        <div style={{ fontSize: 12, color: '#dfe3e8' }}>{value}</div>
+      )}
+    </div>
+  );
+}
+
 const s: Record<string, React.CSSProperties> = {
   page: { padding: '26px 28px 40px' },
   h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#e6e8ec' },
@@ -135,6 +199,10 @@ const s: Record<string, React.CSSProperties> = {
   listQ: { fontSize: 10.5, color: '#8b919c', lineHeight: 1.5 },
   mono: { fontSize: 10, color: '#7e8590', fontFamily: "'JetBrains Mono', monospace" },
   unresolvedBadge: { fontSize: 10, color: '#a07fe0' },
+  custBadge: { fontSize: 9, color: '#c5a8f0', background: '#221830', border: '1px solid #4a2d6a', padding: '1px 6px', borderRadius: 4 },
+  custBadgeLg: { fontSize: 10.5, color: '#c5a8f0', background: '#221830', border: '1px solid #4a2d6a', padding: '2px 8px', borderRadius: 5 },
+  custInfoBox: { background: '#1e1826', border: '1px solid #3a2850', borderRadius: 9, padding: '12px 14px' },
+  custInfoHd: { fontSize: 10, color: '#c5a8f0', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 9 },
   detail: { border: '1px solid #262a33', background: '#1a1d24', borderRadius: 12, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 },
   detailTitle: { margin: '3px 0 0', fontSize: 18, fontWeight: 700, color: '#e6e8ec' },
   rdeBtn: { border: '1px solid #322c47', background: '#1d1a29', color: '#b6a6ee', padding: '7px 12px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },

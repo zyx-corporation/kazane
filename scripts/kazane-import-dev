@@ -126,6 +126,26 @@ CTX_CARDS = [
         "created_at": "2026-06-26T10:00:00",
     },
     {
+        "id": "CTX-010",
+        "title": "AI番頭 顧客対応 Context",
+        "question": "AI番頭がサポートする顧客対応の範囲と、人間が介在すべき境界はどこか。",
+        "purpose": "顧客との信頼関係を維持しながら、AI番頭が問い合わせ整理・返信案・記録を担当する。",
+        "context": "v0.7 musubi: Gmail/CalendarをKazaneに連携し、顧客文脈を蓄積する。",
+        "constraint_text": "送信・価格・謝罪・約束はTomoyukiが判断。顧客データは社外に流出させない。",
+        "past": "v0.7 musubi実装（2026-06-29）。顧客型Context Card（card_type=customer）のサンプルとして作成。",
+        "related_wi_json": j(["WI-710", "WI-711", "WI-712", "WI-713"]),
+        "related_ev_json": j([]),
+        "unresolved_json": j(["顧客ごとのContext Card設計", "プライバシーポリシーの定義", "顧客データ保存ポリシー"]),
+        "next_policy": "顧客対応WIが作成されたらこのContextにリンクする。AI番頭はHandoffで返信案を提出する。",
+        "created_at": "2026-06-29T10:00:00",
+        "card_type": "customer",
+        "customer_company": "（デモ顧客）",
+        "customer_contact": "",
+        "customer_email": "",
+        "customer_phone": "",
+        "customer_relationship": "見込み顧客",
+    },
+    {
         "id": "CTX-V04",
         "title": "v0.4 michi/道 — 開発ワークフロー証明",
         "question": "KazaneはGitHub連携・CLI/MCPを通じて自身の開発フローを管理できることを証明できるか。",
@@ -151,7 +171,9 @@ COL_STATUS = {
 
 def wi_row(id, title, domain, assignee, col, risk, ctx_id, next_action, gate,
            rde, morning, bounced, gate_perm, gate_stops, ctx, ho, ev,
-           rde_audit=None, github_links=None, created_at=NOW):
+           rde_audit=None, github_links=None, created_at=NOW,
+           audit_required=False, reviewer="", deviation_risk="low", drift_note="",
+           source="manual", source_ref=""):
     return (
         id, title, domain, assignee, col, COL_STATUS[col], risk, ctx_id,
         next_action, gate,
@@ -161,6 +183,8 @@ def wi_row(id, title, domain, assignee, col, risk, ctx_id, next_action, gate,
         j(rde_audit) if rde_audit else None,
         None, 0, "",
         j(github_links) if github_links else "[]",
+        1 if audit_required else 0, reviewer, deviation_risk, drift_note,
+        source, source_ref,
         created_at, created_at,
     )
 
@@ -645,31 +669,123 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-601", "v0.6 akashi/証し — 正式Evidence Log・RDE Auditフロー",
-        "開発", "Tomoyuki Kano", "inbox", "低", "CTX-001",
-        "v0.6設計・Evidence Log正式化計画", "設計はTomoyukiが判断",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "実装完了・commit fcbb295", "設計はTomoyukiが判断",
         False, False, False,
         "設計・計画",
         "外部公開",
         ctx={
             "question": "AI生成・AI支援の成果物が意味的ドリフトしていないか、元の設計戦略と照合して監査できる正式フローを整備するには。",
-            "purpose": "v0.6の正式Evidence Log・RDE Audit・レビューチェーン・監査フラグを設計する。",
+            "purpose": "v0.6の正式Evidence Log・RDE Audit・レビューチェーン・監査フラグを設計・実装する。",
             "constraint": "v0.5完了後に着手。",
-            "unresolved": "監査要件の最小定義。レビューチェーンのUI設計。",
+            "unresolved": "—（v0.7に引き継ぎ）",
         },
         ho={
-            "did": "未着手。v0.3でEvidence Logの基盤を実装済み。v0.6で正式化。",
-            "uncertain": "監査フローのUX設計。",
-            "bounce": "v0.5完了まで待機。",
-            "next": "v0.5完了後に設計開始。",
+            "did": "WI-706〜709を実装（Evidence Log統合・RDE drift評価・監査フラグ・ドリフト記録）。migration v8追加。v0.6.0リリースビルド・/Applications/Kazane.appインストール完了。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "v0.7 musubi/結び に引き継ぎ。",
         },
         ev=[],
         created_at="2026-06-28T09:00:00",
     ),
 
     wi_row(
+        "WI-706", "v0.6: Evidence Log 正式化 — ev_json と evidence_log テーブルを UI 統合",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "実装完了・commit fcbb295", "—",
+        False, False, False,
+        "Evidence Log統合実装",
+        "外部公開",
+        ctx={
+            "question": "ev_json（WI埋め込み）とevidence_logテーブル（CLI記録）を統合して証跡チェーンとして表示するには。",
+            "purpose": "WorkItemDrawer evidenceタブで証跡を一元管理する。",
+            "constraint": "migration不要（既存カラム使用）。",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "WorkItemDrawer evidenceタブに証跡チェーンビュー実装。ev_jsonとevidenceLogをwiIdでフィルタして統合表示。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T09:00:00",
+    ),
+
+    wi_row(
+        "WI-707", "v0.6: RDE Audit フロー強化 — drift評価フィールド + kazane-agent連携",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "実装完了・commit fcbb295", "—",
+        False, False, False,
+        "RDE Audit UI強化",
+        "外部公開",
+        ctx={
+            "question": "RdeEvidenceAudit画面をドリフトスコアの可視化に対応させるには。",
+            "purpose": "deviation_risk集計カードと監査対象WIリストを表示する。",
+            "constraint": "—",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "RdeEvidenceAudit.tsxにitems prop追加。deviation riskサマリカード（低/中/高）と監査対象WIリストを実装。3カラムレイアウトに変更。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T09:00:00",
+    ),
+
+    wi_row(
+        "WI-708", "v0.6: レビューチェーン + 監査フラグ — auditRequired / reviewer (migration v8)",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "実装完了・commit fcbb295", "—",
+        False, False, False,
+        "監査フラグ実装",
+        "外部公開",
+        ctx={
+            "question": "WIに監査必須フラグとレビュー担当者を記録し、EscalationGateで可視化するには。",
+            "purpose": "AI生成WIの人間レビュー追跡を可能にする。",
+            "constraint": "migration v8で2カラム追加。",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "migration v8: audit_required・reviewer追加。WorkItemDrawer RDEタブに監査必須トグル+レビュー担当入力。EscalationGateに監査必須パネル追加。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T09:00:00",
+    ),
+
+    wi_row(
+        "WI-709", "v0.6: 意味的ドリフト記録 — deviation_risk / drift_note (migration v8)",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "実装完了・commit fcbb295", "—",
+        False, False, False,
+        "ドリフト記録実装",
+        "外部公開",
+        ctx={
+            "question": "AI生成成果物の意味的ドリフトリスクをWIに記録し監査できるようにするには。",
+            "purpose": "deviation_riskとdrift_noteで逸脱リスクを構造化して保存する。",
+            "constraint": "migration v8で2カラム追加（deviation_risk TEXT / drift_note TEXT）。",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "migration v8: deviation_risk・drift_note追加。WorkItemDrawer RDEタブにdeviation risk 3段階セレクタとdrift noteテキストエリア実装。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T09:00:00",
+    ),
+
+    wi_row(
         "WI-701", "v0.7 musubi/結び — AI番頭 メール・カレンダー・顧客Context連携",
         "開発", "Tomoyuki Kano", "inbox", "低", "CTX-001",
-        "v0.7コンセプト設計", "外部サービス連携はTomoyukiが判断",
+        "v0.7実装中", "外部サービス連携はTomoyukiが判断",
         False, False, False,
         "コンセプト設計・要件整理",
         "外部サービス連携／顧客データ処理",
@@ -680,13 +796,106 @@ WORK_ITEMS = [
             "unresolved": "メール/カレンダー連携APIの選定。顧客Context Cardのプライバシー設計。",
         },
         ho={
-            "did": "未着手。v0.6完了後に着手予定。",
+            "did": "v0.7実装中。WI-710〜713 対応中。",
             "uncertain": "外部サービス連携のスコープと実装コスト。",
-            "bounce": "v0.6完了まで待機。",
-            "next": "v0.6完了後にコンセプト設計開始。",
+            "bounce": "—",
+            "next": "WI-710〜713 完了後にdone移行。",
         },
         ev=[],
         created_at="2026-06-28T09:00:00",
+    ),
+
+    # ── v0.7 musubi ── In Progress
+    wi_row(
+        "WI-710", "v0.7: 顧客Context Card — card_type + customerフィールド (migration v9)",
+        "開発", "Claude Code", "ai", "低", "CTX-001",
+        "実装完了・コミット待ち", "—",
+        False, False, False,
+        "migration + 型定義 + UI実装",
+        "外部公開",
+        ctx={
+            "question": "ContextCardに顧客情報フィールドを追加し、顧客型Cardを識別できるようにするには。",
+            "purpose": "AI番頭の顧客対応フローでContext Cardを顧客情報のハブとして使えるようにする。",
+            "constraint": "migration v9で6カラム追加。既存Cardはcard_type=generalとしてデフォルト化。",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "migration v9: card_type / customer_company / customer_contact / customer_email / customer_phone / customer_relationship追加。ContextCards.tsx: 顧客バッジ・typeフィルタ・顧客情報セクション実装。NewContextCardModal: card_typeセレクタ追加。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T10:00:00",
+    ),
+
+    wi_row(
+        "WI-711", "v0.7: Gmail→WI インポート — kazane-agent mail-import (source field, migration v10)",
+        "開発", "Claude Code", "ai", "低", "CTX-001",
+        "実装完了・コミット待ち", "—",
+        False, False, False,
+        "CLIコマンド + DB + UI実装",
+        "外部公開",
+        ctx={
+            "question": "Gmail MCP経由で読んだメールスレッドをWIとしてKazaneに記録し、source=gmailバッジで識別できるようにするには。",
+            "purpose": "AI番頭がGmailを読み、顧客対応WIを自動生成するフローを実装する。",
+            "constraint": "migration v10でsource/source_refカラム追加。実際のGmail読み取りはClaude Codeが行いkazane-agent mail-importで書き込む。",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "migration v10: source / source_ref追加。kazane-agent mail-importコマンド追加（--from/--subject/--snippet/--thread-id/--domain/--ctx/--risk）。WorkBoard: メールバッジ表示。WorkItemDrawer: メールバッジ表示。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T10:00:00",
+    ),
+
+    wi_row(
+        "WI-712", "v0.7: Calendar→WI/Context — kazane-agent calendar-import",
+        "開発", "Claude Code", "ai", "低", "CTX-001",
+        "実装完了・コミット待ち", "—",
+        False, False, False,
+        "CLIコマンド実装",
+        "外部公開",
+        ctx={
+            "question": "Calendar MCP経由で読んだイベントをWIまたはEvidenceとしてKazaneに記録するには。",
+            "purpose": "AI番頭が今日の予定を読み、会議フォローアップWIを生成するフローを実装する。",
+            "constraint": "既存WIへのEvidence追記（--wi）と新規WI作成の両モードを持つ。",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "kazane-agent calendar-importコマンド追加（--title/--date/--attendees/--event-id/--domain/--ctx/--wi）。source=calendarバッジ表示（WorkBoard/WorkItemDrawer）。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T10:00:00",
+    ),
+
+    wi_row(
+        "WI-713", "v0.7: AI番頭デモフロー — banto-demo + 統合シナリオ",
+        "開発", "Claude Code", "ai", "低", "CTX-001",
+        "実装完了・コミット待ち", "—",
+        False, False, False,
+        "デモシナリオ実装",
+        "外部公開",
+        ctx={
+            "question": "AI番頭デモフローを一気通貫で示すためのシナリオとCLIコマンドをどう実装するか。",
+            "purpose": "Gmail→WI作成→Context更新→Calendar連携→Handoffの流れをkazane-agent banto-demoで解説する。",
+            "constraint": "—",
+            "unresolved": "—",
+        },
+        ho={
+            "did": "kazane-agent banto-demoコマンド追加。5ステップデモフロー（Gmail確認→WI作成→返信案→Calendar連携→状態確認）を出力。",
+            "uncertain": "—",
+            "bounce": "—",
+            "next": "Done。",
+        },
+        ev=[],
+        created_at="2026-06-29T10:00:00",
     ),
 ]
 
@@ -959,13 +1168,22 @@ def main():
             INSERT OR REPLACE INTO context_cards
               (id, title, question, purpose, context, constraint_text, past,
                related_wi_json, related_ev_json, unresolved_json, next_policy,
+               card_type, customer_company, customer_contact, customer_email,
+               customer_phone, customer_relationship,
                created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             c["id"], c["title"], c["question"], c["purpose"], c["context"],
             c["constraint_text"], c["past"],
             c["related_wi_json"], c["related_ev_json"], c["unresolved_json"],
-            c["next_policy"], c["created_at"], NOW,
+            c["next_policy"],
+            c.get("card_type", "general"),
+            c.get("customer_company", ""),
+            c.get("customer_contact", ""),
+            c.get("customer_email", ""),
+            c.get("customer_phone", ""),
+            c.get("customer_relationship", ""),
+            c["created_at"], NOW,
         ))
 
     for row in WORK_ITEMS:
@@ -975,8 +1193,11 @@ def main():
                next_action, gate, rde, morning, bounced, gate_perm, gate_stops,
                ctx_json, ho_json, ev_json, rde_audit_json,
                agent_picked_up_at, agent_escalated, escalation_reason,
-               github_links_json, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               github_links_json,
+               audit_required, reviewer, deviation_risk, drift_note,
+               source, source_ref,
+               created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, row)
 
     for h in HANDOFFS:

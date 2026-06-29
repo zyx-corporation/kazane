@@ -136,6 +136,8 @@ function WorkCard({ item, menuOpen, onOpen, onMenuToggle, onMove, currentCol }: 
           <span style={s.gateChip}>⚑ {item.gate}</span>
           {item.rde && <span style={s.rdeChip}>RDE要</span>}
           {stale && <span style={s.staleChip}>停滞 {STALE_DAYS}d+</span>}
+          {item.source === 'gmail' && <span style={s.gmailChip}>メール</span>}
+          {item.source === 'calendar' && <span style={s.calChip}>予定</span>}
         </div>
         <div style={s.tagRow}>
           {['文脈', '引継', '証跡', '監査'].map(tg => <span key={tg} style={s.tag}>{tg}</span>)}
@@ -188,6 +190,8 @@ const s: Record<string, React.CSSProperties> = {
   gateChip: { fontSize: 9.5, color: '#c9b27a', background: '#241f16', border: '1px solid #3a3220', padding: '3px 7px', borderRadius: 5 },
   rdeChip: { fontSize: 9.5, color: '#b6a6ee', background: '#1d1a29', border: '1px solid #322c47', padding: '3px 7px', borderRadius: 5 },
   staleChip: { fontSize: 9.5, color: '#a89464', background: '#241f16', border: '1px solid #3a3220', padding: '3px 7px', borderRadius: 5 },
+  gmailChip: { fontSize: 9.5, color: '#8abfe0', background: '#151e28', border: '1px solid #243349', padding: '3px 7px', borderRadius: 5 },
+  calChip: { fontSize: 9.5, color: '#7ec9a4', background: '#151f1b', border: '1px solid #244035', padding: '3px 7px', borderRadius: 5 },
   tagRow: { display: 'flex', gap: 4, paddingTop: 2, borderTop: '1px solid #23272f' },
   tag: { fontSize: 9, color: '#6a7078', background: '#16191f', padding: '2px 6px', borderRadius: 4 },
   moveMenu: { position: 'absolute', top: 0, right: -142, zIndex: 40, background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 9, padding: '9px 8px', width: 135, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' },

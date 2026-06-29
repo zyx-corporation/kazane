@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile, GitHubLink, DeviationRisk } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile, GitHubLink, DeviationRisk, CardType, WorkItemSource } from '../types';
 
 let _db: Database | null = null;
 
@@ -28,8 +28,9 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
         agent_picked_up_at, agent_escalated, escalation_reason,
         github_links_json,
         audit_required, reviewer, deviation_risk, drift_note,
+        source, source_ref,
         updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,datetime('now'))
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        title=$2, domain=$3, assignee=$4, col=$5, status=$6, risk=$7,
        context_id=$8, next_action=$9, gate=$10, rde=$11, morning=$12, bounced=$13,
@@ -38,6 +39,7 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
        agent_picked_up_at=$20, agent_escalated=$21, escalation_reason=$22,
        github_links_json=$23,
        audit_required=$24, reviewer=$25, deviation_risk=$26, drift_note=$27,
+       source=$28, source_ref=$29,
        updated_at=datetime('now')`,
     [
       item.id, item.title, item.domain, item.assignee, item.col, item.status,
@@ -54,6 +56,8 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
       item.reviewer ?? '',
       item.deviationRisk ?? 'low',
       item.driftNote ?? '',
+      item.source ?? 'manual',
+      item.sourceRef ?? '',
     ],
   );
 }
@@ -76,17 +80,27 @@ export async function dbUpsertContextCard(card: ContextCard): Promise<void> {
   await d.execute(
     `INSERT INTO context_cards
        (id, title, question, purpose, context, constraint_text, past,
-        related_wi_json, related_ev_json, unresolved_json, next_policy, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,datetime('now'))
+        related_wi_json, related_ev_json, unresolved_json, next_policy,
+        card_type, customer_company, customer_contact, customer_email,
+        customer_phone, customer_relationship, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        title=$2, question=$3, purpose=$4, context=$5, constraint_text=$6, past=$7,
        related_wi_json=$8, related_ev_json=$9, unresolved_json=$10, next_policy=$11,
+       card_type=$12, customer_company=$13, customer_contact=$14, customer_email=$15,
+       customer_phone=$16, customer_relationship=$17,
        updated_at=datetime('now')`,
     [
       card.id, card.title, card.question, card.purpose, card.context,
       card.constraint, card.past,
       JSON.stringify(card.relatedWI), JSON.stringify(card.relatedEv),
       JSON.stringify(card.unresolved), card.nextPolicy,
+      card.cardType ?? 'general',
+      card.customerCompany ?? '',
+      card.customerContact ?? '',
+      card.customerEmail ?? '',
+      card.customerPhone ?? '',
+      card.customerRelationship ?? '',
     ],
   );
 }
@@ -258,6 +272,8 @@ function rowToItem(r: Record<string, unknown>): WorkItem {
     reviewer: r.reviewer as string | undefined || undefined,
     deviationRisk: (r.deviation_risk as DeviationRisk | undefined) ?? 'low',
     driftNote: r.drift_note as string | undefined || undefined,
+    source: (r.source as WorkItemSource | undefined) ?? 'manual',
+    sourceRef: r.source_ref as string | undefined || undefined,
   };
 }
 
@@ -295,5 +311,11 @@ function rowToCtx(r: Record<string, unknown>): ContextCard {
     relatedEv: JSON.parse(r.related_ev_json as string),
     unresolved: JSON.parse(r.unresolved_json as string),
     nextPolicy: r.next_policy as string,
+    cardType: (r.card_type as CardType | undefined) ?? 'general',
+    customerCompany: r.customer_company as string | undefined || undefined,
+    customerContact: r.customer_contact as string | undefined || undefined,
+    customerEmail: r.customer_email as string | undefined || undefined,
+    customerPhone: r.customer_phone as string | undefined || undefined,
+    customerRelationship: r.customer_relationship as string | undefined || undefined,
   };
 }

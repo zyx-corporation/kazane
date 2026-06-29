@@ -210,6 +210,28 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "add_customer_fields_to_context_cards",
+            sql: "
+                ALTER TABLE context_cards ADD COLUMN card_type TEXT NOT NULL DEFAULT 'general';
+                ALTER TABLE context_cards ADD COLUMN customer_company TEXT NOT NULL DEFAULT '';
+                ALTER TABLE context_cards ADD COLUMN customer_contact TEXT NOT NULL DEFAULT '';
+                ALTER TABLE context_cards ADD COLUMN customer_email TEXT NOT NULL DEFAULT '';
+                ALTER TABLE context_cards ADD COLUMN customer_phone TEXT NOT NULL DEFAULT '';
+                ALTER TABLE context_cards ADD COLUMN customer_relationship TEXT NOT NULL DEFAULT '';
+            ",
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "add_source_to_work_items",
+            sql: "
+                ALTER TABLE work_items ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+                ALTER TABLE work_items ADD COLUMN source_ref TEXT NOT NULL DEFAULT '';
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

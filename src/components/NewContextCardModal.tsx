@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import type { Translations } from '../i18n';
+import type { CardType } from '../types';
 
 interface NewContextCardModalProps {
   t: Translations;
   onClose: () => void;
-  onSubmit: (title: string, question: string) => void;
+  onSubmit: (title: string, question: string, cardType: CardType, customerCompany: string) => void;
 }
 
 export function NewContextCardModal({ t, onClose, onSubmit }: NewContextCardModalProps) {
   const [title, setTitle] = useState('');
   const [question, setQuestion] = useState('');
+  const [cardType, setCardType] = useState<CardType>('general');
+  const [company, setCompany] = useState('');
 
   function submit() {
     if (!title.trim()) return;
-    onSubmit(title.trim(), question.trim() || '（未記入）');
+    onSubmit(title.trim(), question.trim() || '（未記入）', cardType, company.trim());
   }
 
   return (
@@ -26,6 +29,36 @@ export function NewContextCardModal({ t, onClose, onSubmit }: NewContextCardModa
         </div>
 
         <div style={s.body}>
+          <label style={s.label}>カードタイプ</label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            {(['general', 'customer'] as CardType[]).map(ct => (
+              <button
+                key={ct}
+                onClick={() => setCardType(ct)}
+                style={{
+                  ...s.typeBtn,
+                  background: cardType === ct ? '#1d2230' : '#14161b',
+                  border: `1px solid ${cardType === ct ? (ct === 'customer' ? '#7e5fb8' : '#3a4656') : '#2d323d'}`,
+                  color: cardType === ct ? (ct === 'customer' ? '#c5a8f0' : '#9cc0f5') : '#7e8590',
+                }}
+              >
+                {ct === 'general' ? '汎用' : '顧客'}
+              </button>
+            ))}
+          </div>
+
+          {cardType === 'customer' && (
+            <>
+              <label style={s.label}>会社名 / 顧客名</label>
+              <input
+                value={company}
+                onChange={e => setCompany(e.target.value)}
+                placeholder="株式会社〇〇"
+                style={{ ...s.input, marginBottom: 14 }}
+              />
+            </>
+          )}
+
           <label style={s.label}>{t.fCtxTitle}</label>
           <input
             value={title}
@@ -64,6 +97,7 @@ const s: Record<string, React.CSSProperties> = {
   closeBtn: { border: 'none', background: 'transparent', color: '#7e8590', fontSize: 20, cursor: 'pointer' },
   body: { padding: '18px 22px', display: 'flex', flexDirection: 'column' },
   label: { fontSize: 11, color: '#7e8590', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em', marginBottom: 7 },
+  typeBtn: { padding: '6px 16px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 },
   input: { background: '#14161b', border: '1px solid #2d323d', borderRadius: 8, color: '#e6e8ec', fontSize: 13.5, padding: '9px 12px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const, width: '100%' },
   textarea: { background: '#14161b', border: '1px solid #2d323d', borderRadius: 8, color: '#e6e8ec', fontSize: 13, padding: '9px 12px', fontFamily: 'inherit', outline: 'none', resize: 'vertical' as const, boxSizing: 'border-box' as const, width: '100%' },
   footer: { padding: '14px 22px 20px', borderTop: '1px solid #262a33', display: 'flex', gap: 9, justifyContent: 'flex-end' },

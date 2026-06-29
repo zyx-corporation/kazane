@@ -84,6 +84,9 @@ export interface WorkItem {
   reviewer?: string;
   deviationRisk?: DeviationRisk;
   driftNote?: string;
+  // v0.7: source tracking
+  source?: WorkItemSource;
+  sourceRef?: string;
 }
 
 export interface EnrichedWorkItem extends WorkItem {
@@ -93,6 +96,9 @@ export interface EnrichedWorkItem extends WorkItem {
   riskLabel: string;
   actorColor: string;
 }
+
+export type CardType = 'general' | 'customer';
+export type WorkItemSource = 'manual' | 'gmail' | 'calendar';
 
 export interface ContextCard {
   id: string;
@@ -106,6 +112,13 @@ export interface ContextCard {
   relatedEv: string[];
   unresolved: string[];
   nextPolicy: string;
+  // v0.7: customer context
+  cardType?: CardType;
+  customerCompany?: string;
+  customerContact?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  customerRelationship?: string;
 }
 
 export interface HandoffNote {

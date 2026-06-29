@@ -406,12 +406,14 @@ export default function App() {
     addItem({ title: form.title.trim(), domain: form.domain, assignee: form.assignee });
   }
 
-  function addContext(title: string, question: string) {
+  function addContext(title: string, question: string, cardType: import('./types').CardType = 'general', customerCompany = '') {
     const id = nextCtxId(contexts);
     const card: ContextCard = {
       id, title, question,
       purpose: '目的を記入。', context: '', constraint: '制約を記入。',
       past: '', relatedWI: [], relatedEv: [], unresolved: [], nextPolicy: '担当が随時更新。',
+      cardType,
+      customerCompany: customerCompany || undefined,
     };
     const updated = [card, ...contexts];
     setContexts(updated);
