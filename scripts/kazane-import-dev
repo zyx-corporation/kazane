@@ -369,24 +369,29 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-403", "v0.4: 開発エージェントロール定義 — Tech Lead/QA/Reviewer/RDE",
-        "開発", "Tomoyuki Kano", "inbox", "中", "CTX-ADR004",
-        "エージェントロール定義と権限マトリクス作成", "ロール設計はTomoyukiが最終判断",
+        "開発", "Tomoyuki Kano", "ai", "中", "CTX-ADR004",
+        "PRレビュー・マージ待ち", "ロール設計はTomoyukiが最終判断",
         False, False, False,
         "ロール設計・権限定義・ドキュメント",
         "権限付与の最終決定／外部公開",
         ctx={
             "question": "Kazane開発フローにTech Lead・QA・Reviewer・RDEという開発特化エージェントロールを定義するにはどうするか。",
             "purpose": "v0.4の開発ワークフロー証明にあたり、役割・権限・Gate条件を明文化する。",
-            "constraint": "ロールが実態に合わない形式的なものにならないよう注意。",
-            "unresolved": "各ロールの具体的権限スコープ。Reviewerの承認フロー設計。",
+            "constraint": "ロールが実態に合わない形式的なものにならないよう注意。既存GateRule設計と整合を取る。",
+            "unresolved": "Reviewerの承認フロー実装。ロール間の引き継ぎプロトコル設計。",
         },
         ho={
-            "did": "未着手。",
-            "uncertain": "各ロールの責任境界の粒度。",
+            "did": "Tech Lead(AGT-DEV-TL)・QA(AGT-DEV-QA)・Reviewer(AGT-DEV-RVW)・RDE Auditor(AGT-DEV-RDE)の4ロールをAgent Profileとしてkazane-import-devに追加。各ロールのtrust_level・capabilities・gate_perm・gate_stopsを定義。ADR-0004のAgent Profileモデルに基づく開発特化ロールとして実装。",
+            "judged": "4ロールの責任境界を権限（gate_perm）と停止条件（gate_stops）で明文化。Tauri-firstのSQLite直接投入形式で実装。",
+            "couldnt": "Reviewerの承認フロー実装、ロール間自動引き継ぎ、CI連携は未実装。",
+            "uncertain": "各ロールのツール呼び出し権限スコープの詳細。",
             "bounce": "—",
-            "next": "ADR-0004とAgent Profileモデルをベースにロール定義を作成。",
+            "next": "PRを作成してTomoyukiにレビュー依頼。承認フローはv0.5で設計。",
+            "updCtx": "CTX-ADR004 のpastにWI-403完了を記録。",
         },
-        ev=[],
+        ev=[
+            {"type": "コード変更", "label": "AGT-DEV-TL/QA/RVW/RDE Agent Profile追加（import script）", "trust": "高"},
+        ],
         created_at="2026-06-28T09:00:00",
     ),
 
@@ -761,6 +766,43 @@ AGENT_PROFILES = [
         "capabilities_json": json.dumps(["草案作成", "テキスト整理", "内部調査"], ensure_ascii=False),
         "gate_perm": "草案・内部整理のみ",
         "gate_stops": "外部送信／顧客データ処理／本番関連操作",
+    },
+    # v0.4 michi: Development-specific agent roles (WI-403)
+    {
+        "id": "AGT-DEV-TL", "name": "Tech Lead", "model": "claude-sonnet-4-6", "trust_level": "高",
+        "capabilities_json": json.dumps([
+            "アーキテクチャ設計", "ADR起草", "実装方針決定", "PR作成",
+            "技術的負債の特定", "設計レビュー", "スコープ判断",
+        ], ensure_ascii=False),
+        "gate_perm": "調査・設計・実装・PR起草・ADR提案",
+        "gate_stops": "本番反映／ADR確定（Tomoyuki判断）／破壊的変更／外部API変更",
+    },
+    {
+        "id": "AGT-DEV-QA", "name": "QA", "model": "claude-sonnet-4-6", "trust_level": "高",
+        "capabilities_json": json.dumps([
+            "tsc型チェック実行", "cargo check", "テスト計画立案",
+            "エビデンス収集", "回帰リスク評価", "バグ分類",
+        ], ensure_ascii=False),
+        "gate_perm": "テスト実行・エビデンス記録・バグ報告",
+        "gate_stops": "本番反映／テスト環境以外への変更適用",
+    },
+    {
+        "id": "AGT-DEV-RVW", "name": "Reviewer", "model": "claude-sonnet-4-6", "trust_level": "高",
+        "capabilities_json": json.dumps([
+            "コードレビュー", "セキュリティ影響評価", "差分分析",
+            "RDE監査支援", "改善提案", "PRコメント起草",
+        ], ensure_ascii=False),
+        "gate_perm": "レビュー・分析・改善提案・PRコメント",
+        "gate_stops": "マージ承認（Tomoyuki判断）／本番反映",
+    },
+    {
+        "id": "AGT-DEV-RDE", "name": "RDE Auditor", "model": "claude-sonnet-4-6", "trust_level": "高",
+        "capabilities_json": json.dumps([
+            "価値保全確認（Retained）", "変容分析（Transformed）",
+            "未解決点特定（Unresolved）", "乖離リスク評価（Deviation）",
+        ], ensure_ascii=False),
+        "gate_perm": "RDE監査・分析・レポート起草",
+        "gate_stops": "監査結果の最終承認（Tomoyuki判断）",
     },
 ]
 
