@@ -16,6 +16,23 @@
 | v0.9 | utsuwa / 器 | Product candidate | Prepare onboarding, permissions, deployment, and product materials |
 | v1.0 | kanade / 奏で | First public release | Provide Kazane as a Tauri-based AI-era work operating system |
 
+## Chronicle-native work extensions placement
+
+Kazane should adopt useful interaction patterns from AI-native development workflows without narrowing the product into an AI IDE. The detailed proposal is maintained in [chronicle-native-work-extensions.md](chronicle-native-work-extensions.md).
+
+| Feature | Suggested release | Reason |
+|---|---:|---|
+| AI Activity Timeline | v0.2 | Needed when agents begin to pick up assigned work |
+| AI Task Request | v0.2 | Natural entry point for agent-assigned work |
+| Living PRD | v0.3 | Needed when work, decisions, and outputs become traceable history |
+| Micro Change Workflow | v0.4 | Best aligned with development workflow proof, GitHub linkage, tests, and T-RDE |
+| Intent Graph | v0.4-v0.5 | Useful once Context, Work Items, GitHub, and artifacts are linkable |
+| Chronicle Diff | v0.6 | Requires enough Chronicle history and RDE structure to be meaningful |
+| AI Confidence View | v0.6 | Should mature together with Evidence Log and RDE Audit |
+| Chronicle Progress | v0.6-v0.8 | Requires stable progress dimensions and partner feedback |
+| Self-Healing Workflow | v0.7-v0.8 | Safer after permission, evidence, and escalation patterns exist |
+| Chronicle Replay | v0.8-v1.0 | Product-level differentiator once enough provenance exists |
+
 ## Runtime direction
 
 Kazane is Tauri-first from the prototype stage.
@@ -90,13 +107,16 @@ Features:
 - Needs Human status;
 - simple scheduled scans;
 - agent manual fields;
-- minimal permission flags.
+- minimal permission flags;
+- AI Activity Timeline;
+- AI Task Request.
 
 Exit criteria:
 
 - at least one AI agent can pick up an assigned Work Item;
 - agent can return a Handoff Note;
 - agent can stop and escalate with a reason;
+- users can see what stage an AI agent is in without exposing private reasoning traces;
 - Kazane is used to support Kazane work.
 
 ## v0.3 tsuzuri / 綴り
@@ -110,12 +130,14 @@ Features:
 - Context update proposals;
 - Work timeline;
 - Agent Profile minimum model;
-- basic RDE Audit template.
+- basic RDE Audit template;
+- Living PRD.
 
 Exit criteria:
 
 - a major Kazane design decision can be traced from Context to Work Item, Handoff, Evidence, and Context update;
-- users can answer why a decision was made from Kazane data.
+- users can answer why a decision was made from Kazane data;
+- at least one Living PRD can be traced back to its originating Intent and forward to resulting Work Items.
 
 ## v0.4 michi / 道
 
@@ -127,12 +149,15 @@ Features:
 - CLI/MCP prototype;
 - Tech Lead / QA / Reviewer / RDE agent roles;
 - test result evidence;
-- development-oriented escalation.
+- development-oriented escalation;
+- Micro Change Workflow;
+- initial Intent Graph view for development work.
 
 Exit criteria:
 
 - Kazane can manage its own development flow through GitHub-linked evidence;
-- development use case is demonstrable without claiming Kazane is development-only.
+- development use case is demonstrable without claiming Kazane is development-only;
+- at least one implementation change is represented as Micro Changes linked to tests, review, and Chronicle records.
 
 ## v0.5 ayumi / 歩み
 
@@ -145,12 +170,14 @@ Features:
 - operations workflow;
 - customer/support-like workflow;
 - internal standup dashboard;
-- stale work detection.
+- stale work detection;
+- Intent Graph expansion beyond development workflows.
 
 Exit criteria:
 
 - ZYX can manage multiple non-development workflows in Kazane;
-- Kazane itself is dogfooded across product, docs, and operations.
+- Kazane itself is dogfooded across product, docs, and operations;
+- Intent Graph can connect non-development work from origin to artifact or decision.
 
 ## v0.6 akashi / 証し
 
@@ -162,12 +189,16 @@ Features:
 - RDE Audit flow;
 - review chain support;
 - audit-required flags;
-- deviation-risk records.
+- deviation-risk records;
+- Chronicle Diff;
+- AI Confidence View;
+- Chronicle Progress draft dimensions.
 
 Exit criteria:
 
 - AI-generated or AI-assisted work can be audited for semantic drift;
-- work can be reviewed against original design strategy.
+- work can be reviewed against original design strategy;
+- Chronicle Diff can explain meaning-level changes between two versions of a Chronicle object.
 
 ## v0.7 musubi / 結び
 
@@ -180,12 +211,14 @@ Features:
 - document workflow concept;
 - meeting-note import concept;
 - customer Context Card;
-- diagnosis/support template.
+- diagnosis/support template;
+- Self-Healing Workflow concept.
 
 Exit criteria:
 
 - AI番頭 demo flow can be shown using Kazane concepts;
-- customer context and work handoff can be linked.
+- customer context and work handoff can be linked;
+- at least one self-healing proposal can be generated without bypassing human approval boundaries.
 
 ## v0.8 hibiki / 響き
 
@@ -197,12 +230,15 @@ Features:
 - small-business onboarding template;
 - diagnostic workflow template;
 - simplified non-engineer UI labels;
-- privacy and trust explanation.
+- privacy and trust explanation;
+- Chronicle Progress refinement;
+- Chronicle Replay prototype.
 
 Exit criteria:
 
 - one partner or trial user can understand the workflow;
-- external feedback is captured as Context, not only feature requests.
+- external feedback is captured as Context, not only feature requests;
+- users can replay the provenance of at least one work item or decision.
 
 ## v0.9 utsuwa / 器
 
@@ -217,32 +253,17 @@ Features:
 - onboarding;
 - product website copy;
 - pricing draft;
-- support boundary.
-
-Exit criteria:
-
-- external pilot is feasible;
-- product claims and limits are documented;
-- operational expectations are explicit.
+- support boundary;
+- Chronicle Replay hardening.
 
 ## v1.0 kanade / 奏で
 
 First public release.
 
-Promise:
+Features:
 
-- manage human–AI work flows;
-- preserve context and provenance;
-- support handoffs, escalation, evidence, and review;
-- support macOS/Linux through Tauri;
-- maintain iOS as a visible future target;
-- local-first deployment path.
-
-Non-promise:
-
-- complete autonomous management;
-- replacement for legal/accounting/medical experts;
-- enterprise-grade workflow suite;
-- fully hosted SaaS by default;
-- objective guarantee of audit correctness;
-- full iOS feature parity at v1.0.
+- stable Tauri-based local application boundary;
+- documented human-AI work model;
+- durable Work Item, Context Card, Handoff, Evidence, and RDE concepts;
+- mature enough Chronicle-native work flow for public onboarding;
+- clear responsibility, privacy, and support boundaries.
