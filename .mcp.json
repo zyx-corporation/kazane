@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "kazane": {
+      "command": "scripts/kazane-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
