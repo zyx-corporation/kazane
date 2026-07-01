@@ -307,7 +307,9 @@ export default function App() {
     if (IS_TAURI && dbReady) dbUpsertHandoff(ho).catch(() => {});
     const wiId = ho.wi.split(' ')[0];
     const escalated = ho.escalated ?? false;
-    const targetCol: BoardCol = escalated ? 'gate' : 'done';
+    const nextAgent = ho.nextAgent ?? '';
+    // nextAgent → route to next agent (stay in 'ai'), escalated → 'gate', else 'done'
+    const targetCol: BoardCol = escalated ? 'gate' : nextAgent ? 'ai' : 'done';
     setItems(prev => {
       let changed: WorkItem | undefined;
       const updated = prev.map(i => {
@@ -317,18 +319,32 @@ export default function App() {
           agentEscalated: escalated,
           escalationReason: ho.escalationReason ?? '',
           bounced: escalated ? true : i.bounced,
+          assignee: nextAgent || i.assignee,
           ho: { ...i.ho, did: ho.did, judged: ho.judged, couldnt: ho.couldnt, uncertain: ho.uncertain, bounce: ho.bounce, next: ho.next },
-          nextAction: targetCol === 'done' ? '完了・記録済' : i.nextAction,
+          nextAction: targetCol === 'done' ? '完了・記録済' : nextAgent ? `${nextAgent} が引き継ぎ` : i.nextAction,
         };
         return changed;
       });
       persistLocal(updated);
-      if (IS_TAURI && dbReady && changed) dbUpsertItem(changed).catch(() => {});
+      if (IS_TAURI && dbReady && changed) {
+        dbUpsertItem(changed).catch(() => {});
+        // Write new task file for next agent
+        if (nextAgent && changed) {
+          const task = {
+            id: wiId, title: changed.title, domain: changed.domain,
+            assignee: nextAgent, contextId: changed.contextId,
+            nextAction: changed.nextAction, risk: changed.risk,
+            routedFrom: ho.agentId ?? ho.assignee,
+          };
+          invoke('write_agent_task', { id: wiId, payload: JSON.stringify(task, null, 2) }).catch(() => {});
+        }
+      }
       return updated;
     });
-    const evType = escalated ? 'agent_escalated' : 'agent_handoff';
+    const evType = escalated ? 'agent_escalated' : nextAgent ? 'agent_handoff' : 'agent_handoff';
     logEv(wiId, evType as EventType, { toCol: targetCol, actor: ho.assignee, note: ho.did.slice(0, 80) });
     if (escalated) flash(t.toastAgentEscalated.replace('{id}', wiId));
+    else if (nextAgent) flash(`${wiId} → ${nextAgent} へルーティング`);
     else flash(t.toastAgentHandoffReceived.replace('{id}', wiId));
   }, [dbReady, logEv, t]);
 

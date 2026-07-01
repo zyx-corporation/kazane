@@ -1,6 +1,6 @@
 {
   "productName": "Kazane",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "identifier": "jp.zyxcorp.kazane",
   "build": {
     "beforeDevCommand": "npm run dev",

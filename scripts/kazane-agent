@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
-# kazane-agent — Agent CLI for Kazane Work OS (v0.7 musubi)
+# kazane-agent — Agent CLI for Kazane Work OS (v0.8 hibiki)
 #
 # Reads Work Items from the Kazane task queue and writes back Handoff Notes.
 # Kazane polls the handoffs directory every 10s and auto-imports results.
 #
 # Usage:
-#   kazane-agent list                           — list pending tasks
-#   kazane-agent pickup                         — print task JSON for each pending item
+#   kazane-agent list                           — list pending tasks (shows lock status)
+#   kazane-agent pickup [--agent-id <id>]       — print task JSON and acquire lock
 #   kazane-agent status                         — project overview (all items by column)
 #   kazane-agent read <WI-ID>                   — print full Work Item as JSON
 #   kazane-agent create --title <title> [opts]  — create a new Work Item in SQLite
 #   kazane-agent update <WI-ID> [opts]          — patch fields on an existing Work Item
 #   kazane-agent report-test --tool <tool> [opts] — record test result as Evidence Log entry
-#   kazane-agent submit <WI-ID>                 — submit a completed handoff
+#   kazane-agent submit <WI-ID> [opts]          — submit a completed handoff
 #   kazane-agent submit <WI-ID> --escalate "reason" — submit with escalation
+#   kazane-agent submit <WI-ID> --next-agent <id>   — route WI to another agent after submit
+#   kazane-agent watch [--timeout <secs>]       — wait for new task (exits 0 when task arrives)
+#   kazane-agent lock <WI-ID>                   — manually acquire processing lock
+#   kazane-agent unlock <WI-ID>                 — release processing lock
 #   kazane-agent auto                           — auto-process all pending tasks (demo)
 #   kazane-agent dirs                           — print task/handoff directory paths
 #   kazane-agent mail-import [opts]             — import a Gmail thread as a Work Item
@@ -27,6 +31,7 @@
 #   --ctx <CTX-ID>       Context Card ID (default: —)
 #   --risk 低|中|高       Risk level (default: 中)
 #   --next <text>        Next action text
+#   --agent-id <id>      Acting agent profile ID (for gate check + audit log)
 #
 # update options:
 #   --col inbox|ai|human|gate|done   Move to column
@@ -34,6 +39,12 @@
 #   --assignee <text>                New assignee
 #   --risk 低|中|高                   New risk level
 #   --next <text>                    New next action
+#   --agent-id <id>                  Acting agent (gate check)
+#
+# submit options:
+#   --escalate "reason"              Escalate to human gate
+#   --next-agent <id>                Route to another agent after completion
+#   --agent-id <id>                  Acting agent (audit log)
 #
 # report-test options:
 #   --tool tsc|cargo-check|cargo-test|vite-build|custom   Tool name (required)
@@ -80,6 +91,60 @@ DB_PATH="$BASE_DIR/kazane.db"
 
 mkdir -p "$HANDOFFS_DIR"
 
+LOCK_TTL=1800  # 30 minutes stale lock threshold
+
+_lock_path() { echo "$TASKS_DIR/$1.lock"; }
+
+_is_locked() {
+  local lock="$(_lock_path "$1")"
+  if [ ! -f "$lock" ]; then return 1; fi
+  local lock_ts now age
+  lock_ts=$(python3 -c "import json,sys; d=json.load(open('$lock')); print(d.get('ts',0))" 2>/dev/null || echo 0)
+  now=$(date +%s)
+  age=$((now - lock_ts))
+  if [ "$age" -gt "$LOCK_TTL" ]; then
+    rm -f "$lock"
+    return 1
+  fi
+  return 0
+}
+
+_acquire_lock() {
+  local wi_id="$1" agent_id="${2:-}"
+  local lock="$(_lock_path "$wi_id")"
+  python3 -c "
+import json, time, os
+lock = '$lock'
+os.makedirs(os.path.dirname(lock), exist_ok=True)
+with open(lock, 'w') as f:
+    json.dump({'wi': '$wi_id', 'agent': '$agent_id', 'ts': int(time.time())}, f)
+" 2>/dev/null
+}
+
+_release_lock() {
+  rm -f "$(_lock_path "$1")" 2>/dev/null
+}
+
+_check_gate_stops() {
+  local agent_id="$1" operation="$2"
+  [ -z "$agent_id" ] && return 0
+  [ ! -f "$DB_PATH" ] && return 0
+  python3 - "$DB_PATH" "$agent_id" "$operation" <<'PYEOF'
+import sqlite3, sys
+db_path, agent_id, operation = sys.argv[1:4]
+con = sqlite3.connect(db_path)
+row = con.execute("SELECT gate_stops FROM agent_profiles WHERE id=?", (agent_id,)).fetchone()
+con.close()
+if not row: sys.exit(0)
+for stop in row[0].split("／"):
+    stop = stop.strip()
+    if stop and stop in operation:
+        print(f"Gate stop: '{stop}' は {agent_id} の権限外です", file=__import__('sys').stderr)
+        sys.exit(1)
+sys.exit(0)
+PYEOF
+}
+
 _json_field() {
   # Extract a JSON string field using python3
   local file="$1" field="$2"
@@ -113,7 +178,7 @@ _pending_tasks() {
 }
 
 _submit_handoff() {
-  local wi_id="$1" escalate="${2:-false}" escalation_reason="${3:-}"
+  local wi_id="$1" escalate="${2:-false}" escalation_reason="${3:-}" next_agent="${4:-}" agent_id="${5:-}"
   local task_file="$TASKS_DIR/$wi_id.json"
 
   if [ ! -f "$task_file" ]; then
@@ -141,6 +206,8 @@ assignee = "$assignee"
 context_id = "$context_id"
 escalate = $escalate
 escalation_reason = "$escalation_reason"
+next_agent = "$next_agent"
+agent_id = "$agent_id"
 ho_id = "$ho_id"
 out_path = sys.argv[1]
 
@@ -162,6 +229,11 @@ ho = {
     "escalated": escalate,
     "escalationReason": escalation_reason or ("責任境界超過" if escalate else ""),
 }
+
+if next_agent:
+    ho["nextAgent"] = next_agent
+if agent_id:
+    ho["agentId"] = agent_id
 
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
 with open(out_path, "w", encoding="utf-8") as f:
@@ -193,12 +265,26 @@ case "$cmd" in
         title=$(_json_field "$f" "title")
         domain=$(_json_field "$f" "domain")
         risk=$(_json_field "$f" "risk")
-        printf "  [%s] %s  domain=%s risk=%s\n" "$wi_id" "$title" "$domain" "$risk"
+        if _is_locked "$wi_id"; then
+          lock_agent=$(python3 -c "import json; d=json.load(open('$(_lock_path "$wi_id")')); print(d.get('agent','?'))" 2>/dev/null || echo "?")
+          printf "  [%s] %s  domain=%s risk=%s  \033[33m[LOCKED by %s]\033[0m\n" "$wi_id" "$title" "$domain" "$risk" "$lock_agent"
+        else
+          printf "  [%s] %s  domain=%s risk=%s\n" "$wi_id" "$title" "$domain" "$risk"
+        fi
       done
     fi
     ;;
 
   pickup)
+    pu_agent_id=""
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --agent-id) pu_agent_id="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
     tasks=()
     while IFS= read -r f; do
       [ -n "$f" ] && tasks+=("$f")
@@ -210,6 +296,12 @@ case "$cmd" in
     fi
     for f in "${tasks[@]}"; do
       wi_id=$(basename "$f" .json)
+      if _is_locked "$wi_id"; then
+        lock_agent=$(python3 -c "import json; d=json.load(open('$(_lock_path "$wi_id")')); print(d.get('agent','?'))" 2>/dev/null || echo "?")
+        echo "Skipping $wi_id (locked by $lock_agent)" >&2
+        continue
+      fi
+      _acquire_lock "$wi_id" "$pu_agent_id"
       echo ""
       echo "=== Task: $wi_id ==="
       cat "$f"
@@ -225,6 +317,7 @@ case "$cmd" in
     wi_ctx="—"
     wi_risk="中"
     wi_next="AIが着手予定"
+    wi_agent_id=""
 
     shift
     while [[ $# -gt 0 ]]; do
@@ -235,14 +328,16 @@ case "$cmd" in
         --ctx)      wi_ctx="$2";      shift 2 ;;
         --risk)     wi_risk="$2";     shift 2 ;;
         --next)     wi_next="$2";     shift 2 ;;
+        --agent-id) wi_agent_id="$2"; shift 2 ;;
         *) echo "Unknown flag: $1" >&2; exit 1 ;;
       esac
     done
 
     if [ -z "$wi_title" ]; then
-      echo "Usage: kazane-agent create --title <title> [--domain <domain>] [--assignee <assignee>] [--ctx <CTX-ID>] [--risk 低|中|高] [--next <nextAction>]" >&2
+      echo "Usage: kazane-agent create --title <title> [--domain <domain>] [--assignee <assignee>] [--ctx <CTX-ID>] [--risk 低|中|高] [--next <nextAction>] [--agent-id <id>]" >&2
       exit 1
     fi
+    [ -n "$wi_agent_id" ] && _check_gate_stops "$wi_agent_id" "create"
 
     if [ ! -f "$DB_PATH" ]; then
       echo "Error: DB not found at $DB_PATH" >&2
@@ -306,16 +401,84 @@ PYEOF
   submit)
     wi_id="${2:-}"
     if [ -z "$wi_id" ]; then
-      echo "Usage: kazane-agent submit <WI-ID> [--escalate \"reason\"]" >&2
+      echo "Usage: kazane-agent submit <WI-ID> [--escalate \"reason\"] [--next-agent <id>] [--agent-id <id>]" >&2
       exit 1
     fi
-    if [ "${3:-}" = "--escalate" ]; then
-      reason="${4:-責任境界を超えるため停止。}"
-      _submit_handoff "$wi_id" "True" "$reason"
-    else
-      _submit_handoff "$wi_id" "False" ""
-    fi
+    sub_escalate="False"
+    sub_reason=""
+    sub_next_agent=""
+    sub_agent_id=""
+    shift 2
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --escalate)   sub_escalate="True"; sub_reason="${2:-責任境界を超えるため停止。}"; shift 2 ;;
+        --next-agent) sub_next_agent="$2"; shift 2 ;;
+        --agent-id)   sub_agent_id="$2";   shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    _submit_handoff "$wi_id" "$sub_escalate" "$sub_reason" "$sub_next_agent" "$sub_agent_id"
+    _release_lock "$wi_id"
     echo "Kazane will pick up the handoff within 10 seconds."
+    ;;
+
+  watch)
+    watch_timeout=300
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --timeout) watch_timeout="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    echo "Watching for new tasks... (timeout: ${watch_timeout}s)" >&2
+    deadline=$(( $(date +%s) + watch_timeout ))
+    seen=()
+    while IFS= read -r f; do
+      [ -n "$f" ] && seen+=("$(basename "$f" .json)")
+    done < <(_pending_tasks)
+
+    while true; do
+      now=$(date +%s)
+      if [ "$now" -ge "$deadline" ]; then
+        echo "Timeout: no new tasks arrived." >&2
+        exit 1
+      fi
+      while IFS= read -r f; do
+        if [ -n "$f" ]; then
+          wi_id=$(basename "$f" .json)
+          found=0
+          for s in "${seen[@]:-}"; do [ "$s" = "$wi_id" ] && found=1 && break; done
+          if [ "$found" -eq 0 ]; then
+            echo "New task: $wi_id"
+            exit 0
+          fi
+        fi
+      done < <(_pending_tasks)
+      sleep 3
+    done
+    ;;
+
+  lock)
+    wi_id="${2:-}"
+    lock_agent="${3:-manual}"
+    if [ -z "$wi_id" ]; then
+      echo "Usage: kazane-agent lock <WI-ID> [agent-id]" >&2; exit 1
+    fi
+    if _is_locked "$wi_id"; then
+      echo "Already locked: $wi_id" >&2; exit 1
+    fi
+    _acquire_lock "$wi_id" "$lock_agent"
+    echo "Locked: $wi_id (agent=$lock_agent)"
+    ;;
+
+  unlock)
+    wi_id="${2:-}"
+    if [ -z "$wi_id" ]; then
+      echo "Usage: kazane-agent unlock <WI-ID>" >&2; exit 1
+    fi
+    _release_lock "$wi_id"
+    echo "Unlocked: $wi_id"
     ;;
 
   auto)
@@ -375,7 +538,7 @@ PYEOF
     fi
 
     shift 2
-    upd_col="" upd_title="" upd_assignee="" upd_risk="" upd_next=""
+    upd_col="" upd_title="" upd_assignee="" upd_risk="" upd_next="" upd_agent_id=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --col)      upd_col="$2";      shift 2 ;;
@@ -383,9 +546,11 @@ PYEOF
         --assignee) upd_assignee="$2"; shift 2 ;;
         --risk)     upd_risk="$2";     shift 2 ;;
         --next)     upd_next="$2";     shift 2 ;;
+        --agent-id) upd_agent_id="$2"; shift 2 ;;
         *) echo "Unknown flag: $1" >&2; exit 1 ;;
       esac
     done
+    [ -n "$upd_agent_id" ] && _check_gate_stops "$upd_agent_id" "update"
 
     python3 - "$DB_PATH" "$wi_id" "$upd_col" "$upd_title" "$upd_assignee" "$upd_risk" "$upd_next" <<'PYEOF'
 import sqlite3, json, sys, datetime

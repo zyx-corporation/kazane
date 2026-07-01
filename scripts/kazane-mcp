@@ -1,0 +1,570 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["mcp>=1.0.0"]
+# ///
+"""
+kazane-mcp — Kazane Work OS MCP Server (v0.8 hibiki)
+
+Exposes Kazane operations as MCP tools so external agents can:
+  - Read / create / update Work Items
+  - Submit Handoff Notes (picked up by the app within 10s)
+  - Add Evidence Log entries
+  - Import Gmail threads and Calendar events as Work Items
+  - Read Context Cards
+
+Transport: stdio (compatible with Claude Code, Claude Desktop, etc.)
+
+Usage in claude_desktop_config.json / .mcp.json:
+  {
+    "kazane": {
+      "command": "/path/to/kazane/scripts/kazane-mcp"
+    }
+  }
+
+Usage with Claude Code (add to project .mcp.json):
+  {
+    "mcpServers": {
+      "kazane": { "command": "scripts/kazane-mcp" }
+    }
+  }
+"""
+
+import asyncio
+import datetime
+import json
+import os
+import sqlite3
+import uuid
+
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import TextContent, Tool
+
+BUNDLE_ID = "jp.zyxcorp.kazane"
+if os.uname().sysname == "Darwin":
+    BASE_DIR = os.path.expanduser(f"~/Library/Application Support/{BUNDLE_ID}")
+else:
+    BASE_DIR = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")) + f"/{BUNDLE_ID}"
+
+DB_PATH = os.path.join(BASE_DIR, "kazane.db")
+TASKS_DIR = os.path.join(BASE_DIR, "tasks")
+HANDOFFS_DIR = os.path.join(BASE_DIR, "handoffs")
+
+COL_STATUS = {
+    "inbox": "Inbox", "ai": "AI Working",
+    "human": "Needs Human", "gate": "Expert / Gate", "done": "Done / Logged",
+}
+
+server = Server("kazane")
+
+
+def _db() -> sqlite3.Connection:
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _now() -> str:
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _next_wi_id(con: sqlite3.Connection) -> str:
+    rows = con.execute("SELECT id FROM work_items WHERE id LIKE 'WI-%'").fetchall()
+    nums = [int(r["id"].replace("WI-", "")) for r in rows if r["id"].replace("WI-", "").isdigit()]
+    return f"WI-{max(nums, default=0) + 1:03d}"
+
+
+def _check_gate(con: sqlite3.Connection, agent_id: str, operation: str) -> str | None:
+    """Returns error message if agent is not permitted, else None."""
+    if not agent_id:
+        return None
+    row = con.execute("SELECT gate_stops FROM agent_profiles WHERE id=?", (agent_id,)).fetchone()
+    if not row:
+        return None
+    stops = row["gate_stops"]
+    for stop in stops.split("／"):
+        stop = stop.strip()
+        if stop and stop in operation:
+            return f"Gate stop: '{stop}' は {agent_id} の権限外です"
+    return None
+
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    return [
+        Tool(
+            name="list_work_items",
+            description="Work Item の一覧を返す。col/domain/assignee でフィルタ可能。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "col": {"type": "string", "enum": ["inbox", "ai", "human", "gate", "done"], "description": "列フィルタ"},
+                    "domain": {"type": "string", "description": "ドメインフィルタ（部分一致）"},
+                    "assignee": {"type": "string", "description": "担当者フィルタ（部分一致）"},
+                    "limit": {"type": "integer", "default": 50},
+                },
+            },
+        ),
+        Tool(
+            name="read_work_item",
+            description="指定 WI-ID の Work Item を完全な JSON で返す。",
+            inputSchema={
+                "type": "object",
+                "properties": {"id": {"type": "string", "description": "WI-ID (例: WI-042)"}},
+                "required": ["id"],
+            },
+        ),
+        Tool(
+            name="create_work_item",
+            description="新しい Work Item を作成し、WI-ID を返す。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "domain": {"type": "string", "default": "開発"},
+                    "assignee": {"type": "string", "default": "AI番頭"},
+                    "context_id": {"type": "string", "default": "—"},
+                    "risk": {"type": "string", "enum": ["低", "中", "高"], "default": "中"},
+                    "next_action": {"type": "string"},
+                    "source": {"type": "string", "enum": ["manual", "gmail", "calendar"], "default": "manual"},
+                    "source_ref": {"type": "string", "default": ""},
+                    "agent_id": {"type": "string", "description": "操作するエージェントのID (AGT-01 等)"},
+                },
+                "required": ["title"],
+            },
+        ),
+        Tool(
+            name="update_work_item",
+            description="Work Item のフィールドを更新する。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "col": {"type": "string", "enum": ["inbox", "ai", "human", "gate", "done"]},
+                    "title": {"type": "string"},
+                    "assignee": {"type": "string"},
+                    "risk": {"type": "string", "enum": ["低", "中", "高"]},
+                    "next_action": {"type": "string"},
+                    "agent_id": {"type": "string"},
+                },
+                "required": ["id"],
+            },
+        ),
+        Tool(
+            name="submit_handoff",
+            description="Work Item の Handoff Note を提出する。Kazane アプリが 10 秒以内に取込む。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wi_id": {"type": "string"},
+                    "did": {"type": "string", "description": "実施内容"},
+                    "uncertain": {"type": "string", "description": "不確実な点"},
+                    "next": {"type": "string", "description": "次のアクション"},
+                    "escalate": {"type": "boolean", "default": False},
+                    "escalation_reason": {"type": "string", "default": ""},
+                    "next_agent": {"type": "string", "description": "次に処理するエージェントID (ルーティング用)"},
+                    "agent_id": {"type": "string"},
+                },
+                "required": ["wi_id", "did", "next"],
+            },
+        ),
+        Tool(
+            name="add_evidence",
+            description="Evidence Log にエントリを追加する。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wi_id": {"type": "string"},
+                    "type": {"type": "string", "description": "証跡タイプ (例: tsc, gmail, calendar, custom)"},
+                    "label": {"type": "string"},
+                    "trust": {"type": "string", "enum": ["低", "中", "高"], "default": "中"},
+                    "store": {"type": "string", "description": "保存場所 (例: local:git:abc1234)"},
+                    "note": {"type": "string", "default": ""},
+                },
+                "required": ["wi_id", "type", "label"],
+            },
+        ),
+        Tool(
+            name="list_context_cards",
+            description="Context Card 一覧を返す。card_type でフィルタ可能。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "card_type": {"type": "string", "enum": ["general", "customer"]},
+                    "query": {"type": "string", "description": "タイトル/質問の部分一致検索"},
+                },
+            },
+        ),
+        Tool(
+            name="mail_import",
+            description="Gmail スレッドを Work Item としてインポートする。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "from_addr": {"type": "string"},
+                    "subject": {"type": "string"},
+                    "snippet": {"type": "string", "default": ""},
+                    "thread_id": {"type": "string", "default": ""},
+                    "domain": {"type": "string", "default": "顧客対応"},
+                    "context_id": {"type": "string", "default": "—"},
+                    "risk": {"type": "string", "enum": ["低", "中", "高"], "default": "中"},
+                    "agent_id": {"type": "string"},
+                },
+                "required": ["from_addr", "subject"],
+            },
+        ),
+        Tool(
+            name="calendar_import",
+            description="Calendar イベントを Work Item または既存 WI の Evidence としてインポートする。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "date": {"type": "string", "description": "ISO 8601 形式 (例: 2026-07-07T14:00:00)"},
+                    "attendees": {"type": "string", "default": ""},
+                    "event_id": {"type": "string", "default": ""},
+                    "domain": {"type": "string", "default": "会議"},
+                    "context_id": {"type": "string", "default": "—"},
+                    "wi_id": {"type": "string", "description": "指定時は既存 WI に Evidence を追記"},
+                    "agent_id": {"type": "string"},
+                },
+                "required": ["title"],
+            },
+        ),
+    ]
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    now = _now()
+
+    # ── list_work_items ───────────────────────────────────────────
+    if name == "list_work_items":
+        col = arguments.get("col")
+        domain = arguments.get("domain")
+        assignee = arguments.get("assignee")
+        limit = int(arguments.get("limit", 50))
+
+        conds, vals = [], []
+        if col:
+            conds.append("col=?"); vals.append(col)
+        if domain:
+            conds.append("domain LIKE ?"); vals.append(f"%{domain}%")
+        if assignee:
+            conds.append("assignee LIKE ?"); vals.append(f"%{assignee}%")
+
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        con = _db()
+        rows = con.execute(
+            f"SELECT id, title, domain, assignee, col, status, risk, context_id, next_action, source, updated_at FROM work_items {where} ORDER BY col, created_at LIMIT ?",
+            vals + [limit],
+        ).fetchall()
+        con.close()
+        items = [dict(r) for r in rows]
+        return [TextContent(type="text", text=json.dumps(items, ensure_ascii=False, indent=2))]
+
+    # ── read_work_item ────────────────────────────────────────────
+    elif name == "read_work_item":
+        wi_id = arguments["id"]
+        con = _db()
+        row = con.execute("SELECT * FROM work_items WHERE id=?", (wi_id,)).fetchone()
+        con.close()
+        if not row:
+            return [TextContent(type="text", text=json.dumps({"error": f"Not found: {wi_id}"}))]
+        d = dict(row)
+        for k in ("ctx_json", "ho_json", "ev_json", "rde_audit_json", "github_links_json"):
+            if d.get(k):
+                try:
+                    d[k] = json.loads(d[k])
+                except Exception:
+                    pass
+        return [TextContent(type="text", text=json.dumps(d, ensure_ascii=False, indent=2))]
+
+    # ── create_work_item ─────────────────────────────────────────
+    elif name == "create_work_item":
+        title = arguments["title"]
+        domain = arguments.get("domain", "開発")
+        assignee = arguments.get("assignee", "AI番頭")
+        ctx_id = arguments.get("context_id", "—")
+        risk = arguments.get("risk", "中")
+        next_action = arguments.get("next_action", "AIが着手予定")
+        source = arguments.get("source", "manual")
+        source_ref = arguments.get("source_ref", "")
+        agent_id = arguments.get("agent_id", "")
+
+        con = _db()
+        err = _check_gate(con, agent_id, f"create:{domain}")
+        if err:
+            con.close()
+            return [TextContent(type="text", text=json.dumps({"error": err}))]
+
+        wi_id = _next_wi_id(con)
+        ctx_json = json.dumps({"question": "（未記入）", "purpose": "目的を記入。", "constraint": "制約を記入。", "unresolved": "未解決点を記入。"}, ensure_ascii=False)
+        ho_json = json.dumps({"did": "未着手。", "uncertain": "—", "bounce": "—", "next": next_action}, ensure_ascii=False)
+        gate = "AI権限内で着手可" if assignee in ("AI番頭", "AI Assistant", "Claude Code", "Codex", "ローカルLLM") else "人間レビュー待ち"
+
+        con.execute(
+            """INSERT INTO work_items
+               (id, title, domain, assignee, col, status, risk, context_id, next_action,
+                gate, rde, morning, bounced, gate_perm, gate_stops,
+                ctx_json, ho_json, ev_json, github_links_json,
+                source, source_ref, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?,?,?)""",
+            (wi_id, title, domain, assignee, "inbox", "Inbox", risk, ctx_id, next_action,
+             gate, "整理・下調べ・草案", "外部送信／契約／金銭／専門家判断",
+             ctx_json, ho_json, source, source_ref, now, now),
+        )
+        if agent_id:
+            ev_id = "EV-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            con.execute(
+                "INSERT OR IGNORE INTO evidence_log (id,type,label,trust,store,wi_id,ho_id,ctx_id,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (ev_id, "agent_action", f"WI作成: {title}", "高", f"agent:{agent_id}", wi_id, "", ctx_id if ctx_id != "—" else "", f"agent_id={agent_id}", now),
+            )
+        con.commit()
+        con.close()
+        return [TextContent(type="text", text=json.dumps({"created": wi_id, "title": title}, ensure_ascii=False))]
+
+    # ── update_work_item ─────────────────────────────────────────
+    elif name == "update_work_item":
+        wi_id = arguments["id"]
+        agent_id = arguments.get("agent_id", "")
+        col = arguments.get("col")
+        title = arguments.get("title")
+        assignee = arguments.get("assignee")
+        risk = arguments.get("risk")
+        next_action = arguments.get("next_action")
+
+        con = _db()
+        err = _check_gate(con, agent_id, f"update:{col or ''}")
+        if err:
+            con.close()
+            return [TextContent(type="text", text=json.dumps({"error": err}))]
+
+        sets, vals = [], []
+        if col:
+            sets += ["col=?", "status=?"]; vals += [col, COL_STATUS.get(col, col)]
+        if title:
+            sets += ["title=?"]; vals.append(title)
+        if assignee:
+            sets += ["assignee=?"]; vals.append(assignee)
+        if risk:
+            sets += ["risk=?"]; vals.append(risk)
+        if next_action:
+            sets += ["next_action=?"]; vals.append(next_action)
+
+        if not sets:
+            con.close()
+            return [TextContent(type="text", text=json.dumps({"error": "更新フィールドが指定されていません"}))]
+
+        sets.append("updated_at=?"); vals.append(now); vals.append(wi_id)
+        cur = con.execute(f"UPDATE work_items SET {', '.join(sets)} WHERE id=?", vals)
+        con.commit()
+        if cur.rowcount == 0:
+            con.close()
+            return [TextContent(type="text", text=json.dumps({"error": f"Not found: {wi_id}"}))]
+        con.close()
+        return [TextContent(type="text", text=json.dumps({"updated": wi_id}, ensure_ascii=False))]
+
+    # ── submit_handoff ────────────────────────────────────────────
+    elif name == "submit_handoff":
+        wi_id = arguments["wi_id"]
+        did = arguments["did"]
+        uncertain = arguments.get("uncertain", "—")
+        next_action = arguments["next"]
+        escalate = bool(arguments.get("escalate", False))
+        escalation_reason = arguments.get("escalation_reason", "")
+        next_agent = arguments.get("next_agent", "")
+        agent_id = arguments.get("agent_id", "")
+
+        con = _db()
+        row = con.execute("SELECT title, domain, assignee, context_id FROM work_items WHERE id=?", (wi_id,)).fetchone()
+        con.close()
+        if not row:
+            return [TextContent(type="text", text=json.dumps({"error": f"Not found: {wi_id}"}))]
+
+        ts = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        ho_id = f"HO-{ts[-5:]}"
+
+        ho = {
+            "id": ho_id,
+            "wi": f"{wi_id} {row['title']}",
+            "assignee": row["assignee"],
+            "domain": row["domain"],
+            "did": did,
+            "judged": "" if escalate else "責任範囲内で完了と判断した。",
+            "couldnt": escalation_reason if escalate else "",
+            "uncertain": uncertain,
+            "bounce": "責任境界を超えるため人間判断へ引き継ぐ。" if escalate else "",
+            "next": next_action,
+            "updCtx": f"{row['context_id']} を更新予定。" if row["context_id"] and row["context_id"] != "—" else "",
+            "ev": [],
+            "gate": "エスカレーション" if escalate else "",
+            "ask": "人間が判断・承認をお願いします。" if escalate else "",
+            "escalated": escalate,
+            "escalationReason": escalation_reason if escalate else "",
+        }
+        if next_agent:
+            ho["nextAgent"] = next_agent
+
+        os.makedirs(HANDOFFS_DIR, exist_ok=True)
+        path = os.path.join(HANDOFFS_DIR, f"{wi_id}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(ho, f, ensure_ascii=False, indent=2)
+
+        # Remove lock if present
+        lock_path = os.path.join(TASKS_DIR, f"{wi_id}.lock")
+        if os.path.exists(lock_path):
+            os.remove(lock_path)
+
+        return [TextContent(type="text", text=json.dumps({
+            "submitted": ho_id, "wi": wi_id,
+            "next_agent": next_agent or None,
+            "message": "Kazane が 10 秒以内に取込みます。",
+        }, ensure_ascii=False))]
+
+    # ── add_evidence ──────────────────────────────────────────────
+    elif name == "add_evidence":
+        wi_id = arguments["wi_id"]
+        ev_type = arguments["type"]
+        label = arguments["label"]
+        trust = arguments.get("trust", "中")
+        store = arguments.get("store", "")
+        note = arguments.get("note", "")
+
+        ev_id = "EV-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:4]
+        con = _db()
+        con.execute(
+            "INSERT OR IGNORE INTO evidence_log (id,type,label,trust,store,wi_id,ho_id,ctx_id,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (ev_id, ev_type, label, trust, store, wi_id, "", "", note, now),
+        )
+        con.commit()
+        con.close()
+        return [TextContent(type="text", text=json.dumps({"added": ev_id, "wi": wi_id}, ensure_ascii=False))]
+
+    # ── list_context_cards ────────────────────────────────────────
+    elif name == "list_context_cards":
+        card_type = arguments.get("card_type")
+        query = arguments.get("query", "")
+
+        conds, vals = [], []
+        if card_type:
+            conds.append("card_type=?"); vals.append(card_type)
+        if query:
+            conds.append("(title LIKE ? OR question LIKE ?)"); vals += [f"%{query}%", f"%{query}%"]
+
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
+        con = _db()
+        rows = con.execute(
+            f"SELECT id, title, question, purpose, card_type, customer_company, next_policy FROM context_cards {where} ORDER BY created_at",
+            vals,
+        ).fetchall()
+        con.close()
+        return [TextContent(type="text", text=json.dumps([dict(r) for r in rows], ensure_ascii=False, indent=2))]
+
+    # ── mail_import ───────────────────────────────────────────────
+    elif name == "mail_import":
+        from_addr = arguments["from_addr"]
+        subject = arguments["subject"]
+        snippet = arguments.get("snippet", "")
+        thread_id = arguments.get("thread_id", "")
+        domain = arguments.get("domain", "顧客対応")
+        ctx_id = arguments.get("context_id", "—")
+        risk = arguments.get("risk", "中")
+        agent_id = arguments.get("agent_id", "")
+
+        con = _db()
+        wi_id = _next_wi_id(con)
+        title = f"[メール] {subject}"
+        ctx_json = json.dumps({
+            "question": f"{from_addr} からの問い合わせの背景と期待値は何か。",
+            "purpose": "顧客の課題を把握し、適切に対応する。",
+            "constraint": "送信・価格・謝罪はTomoyukiが判断。",
+            "unresolved": snippet[:200] if snippet else "本文を確認のこと。",
+        }, ensure_ascii=False)
+        ho_json = json.dumps({
+            "did": "未着手。メールを受信し、Work Itemとして記録した。",
+            "uncertain": "回答内容の最終承認。", "bounce": "—",
+            "next": f"{from_addr} への返信案を作成する。",
+        }, ensure_ascii=False)
+        con.execute(
+            """INSERT INTO work_items
+               (id,title,domain,assignee,col,status,risk,context_id,next_action,
+                gate,rde,morning,bounced,gate_perm,gate_stops,
+                ctx_json,ho_json,ev_json,github_links_json,
+                source,source_ref,created_at,updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?,?,?)""",
+            (wi_id, title, domain, "AI番頭", "inbox", "Inbox", risk, ctx_id,
+             f"{from_addr} への返信案を作成する",
+             "AI権限内で返信案作成可",
+             "問い合わせ整理・返信案作成", "送信／価格提示／謝罪",
+             ctx_json, ho_json, "gmail", thread_id, now, now),
+        )
+        con.commit()
+        con.close()
+        return [TextContent(type="text", text=json.dumps({"created": wi_id, "title": title, "source": "gmail"}, ensure_ascii=False))]
+
+    # ── calendar_import ───────────────────────────────────────────
+    elif name == "calendar_import":
+        title_raw = arguments["title"]
+        date_str = arguments.get("date", "")
+        attendees = arguments.get("attendees", "")
+        event_id = arguments.get("event_id", "")
+        domain = arguments.get("domain", "会議")
+        ctx_id = arguments.get("context_id", "—")
+        target_wi = arguments.get("wi_id", "")
+
+        date_label = date_str[:16].replace("T", " ") if date_str else "未設定"
+        con = _db()
+
+        if target_wi:
+            ev_id = "EV-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            con.execute(
+                "INSERT OR IGNORE INTO evidence_log (id,type,label,trust,store,wi_id,ho_id,ctx_id,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (ev_id, "calendar", f"予定リンク: {title_raw}", "中",
+                 f"calendar:{event_id}" if event_id else "calendar",
+                 target_wi, "", "", date_label, now),
+            )
+            con.commit()
+            con.close()
+            return [TextContent(type="text", text=json.dumps({"added_evidence": ev_id, "wi": target_wi}, ensure_ascii=False))]
+        else:
+            wi_id = _next_wi_id(con)
+            wi_title = f"[予定] {title_raw}"
+            ctx_json = json.dumps({
+                "question": f"「{title_raw}」の目的とアウトカムは何か。",
+                "purpose": "会議内容を記録し、フォローアップを管理する。",
+                "constraint": "決定事項はTomoyukiが確認。",
+                "unresolved": f"日時: {date_label} / 参加者: {attendees or '未設定'}",
+            }, ensure_ascii=False)
+            ho_json = json.dumps({
+                "did": "未着手。カレンダー予定を受信し、Work Itemとして記録した。",
+                "uncertain": "会議アジェンダ・決定事項。", "bounce": "—",
+                "next": "会議後にメモを記録し、フォローアップWIを作成する。",
+            }, ensure_ascii=False)
+            con.execute(
+                """INSERT INTO work_items
+                   (id,title,domain,assignee,col,status,risk,context_id,next_action,
+                    gate,rde,morning,bounced,gate_perm,gate_stops,
+                    ctx_json,ho_json,ev_json,github_links_json,
+                    source,source_ref,created_at,updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?,?,?)""",
+                (wi_id, wi_title, domain, "AI番頭", "inbox", "Inbox", "低", ctx_id,
+                 "会議後にメモを記録し、フォローアップを整理する",
+                 "AI権限内で議事録整理可", "議事録整理・アクション整理", "決定事項の外部通知",
+                 ctx_json, ho_json, "calendar", event_id, now, now),
+            )
+            con.commit()
+            con.close()
+            return [TextContent(type="text", text=json.dumps({"created": wi_id, "title": wi_title, "source": "calendar"}, ensure_ascii=False))]
+
+    return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
+
+
+async def main():
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream, server.create_initialization_options())
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

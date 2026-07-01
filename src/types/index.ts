@@ -139,6 +139,9 @@ export interface HandoffNote {
   // v0.2: agent-submitted fields
   escalated?: boolean;
   escalationReason?: string;
+  // v0.8: agent routing
+  nextAgent?: string;
+  agentId?: string;
 }
 
 export type EventType = 'created' | 'moved' | 'edited' | 'ai_run' | 'ai_done' | 'ai_stopped' | 'agent_assigned' | 'agent_handoff' | 'agent_escalated' | 'rde_run' | 'bounced' | 'deleted';

@@ -2085,7 +2085,7 @@ dependencies = [
 
 [[package]]
 name = "kazane"
-version = "0.0.1"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
