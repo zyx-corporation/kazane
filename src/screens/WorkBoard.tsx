@@ -30,17 +30,26 @@ interface WorkBoardProps {
 export function WorkBoard({ items, t, onOpenItem, onMoveItem }: WorkBoardProps) {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
+
+  const projects = useMemo(() => {
+    const seen = new Set<string>();
+    for (const i of items) { if (i.project) seen.add(i.project); }
+    return Array.from(seen).sort();
+  }, [items]);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return items;
+    let result = items;
+    if (projectFilter) result = result.filter(i => i.project === projectFilter);
+    if (!query.trim()) return result;
     const q = query.toLowerCase();
-    return items.filter(i =>
+    return result.filter(i =>
       i.title.toLowerCase().includes(q) ||
       i.domain.toLowerCase().includes(q) ||
       i.assignee.toLowerCase().includes(q) ||
       i.id.toLowerCase().includes(q)
     );
-  }, [items, query]);
+  }, [items, query, projectFilter]);
 
   function handleMenuMove(id: string, col: BoardCol) {
     setMenuId(null);
@@ -61,12 +70,24 @@ export function WorkBoard({ items, t, onOpenItem, onMoveItem }: WorkBoardProps) 
             {t.legendGate}
           </span>
           </div>
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="検索…"
-            style={{ background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 7, color: '#e6e8ec', fontSize: 12, padding: '6px 12px', fontFamily: 'inherit', outline: 'none', width: 180 }}
-          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            {projects.length > 0 && (
+              <select
+                value={projectFilter}
+                onChange={e => setProjectFilter(e.target.value)}
+                style={{ background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 7, color: projectFilter ? '#c8a0e8' : '#8b919c', fontSize: 12, padding: '6px 10px', fontFamily: 'inherit', outline: 'none' }}
+              >
+                <option value="">全プロジェクト</option>
+                {projects.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            )}
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="検索…"
+              style={{ background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 7, color: '#e6e8ec', fontSize: 12, padding: '6px 12px', fontFamily: 'inherit', outline: 'none', width: 180 }}
+            />
+          </div>
         </div>
       </div>
 
@@ -138,6 +159,7 @@ function WorkCard({ item, menuOpen, onOpen, onMenuToggle, onMove, currentCol }: 
           {stale && <span style={s.staleChip}>停滞 {STALE_DAYS}d+</span>}
           {item.source === 'gmail' && <span style={s.gmailChip}>メール</span>}
           {item.source === 'calendar' && <span style={s.calChip}>予定</span>}
+          {item.project && <span style={s.projectChip}>{item.project}</span>}
         </div>
         <div style={s.tagRow}>
           {['文脈', '引継', '証跡', '監査'].map(tg => <span key={tg} style={s.tag}>{tg}</span>)}
@@ -192,6 +214,7 @@ const s: Record<string, React.CSSProperties> = {
   staleChip: { fontSize: 9.5, color: '#a89464', background: '#241f16', border: '1px solid #3a3220', padding: '3px 7px', borderRadius: 5 },
   gmailChip: { fontSize: 9.5, color: '#8abfe0', background: '#151e28', border: '1px solid #243349', padding: '3px 7px', borderRadius: 5 },
   calChip: { fontSize: 9.5, color: '#7ec9a4', background: '#151f1b', border: '1px solid #244035', padding: '3px 7px', borderRadius: 5 },
+  projectChip: { fontSize: 9.5, color: '#c8a0e8', background: '#1a1326', border: '1px solid #3d2656', padding: '3px 7px', borderRadius: 5 },
   tagRow: { display: 'flex', gap: 4, paddingTop: 2, borderTop: '1px solid #23272f' },
   tag: { fontSize: 9, color: '#6a7078', background: '#16191f', padding: '2px 6px', borderRadius: 4 },
   moveMenu: { position: 'absolute', top: 0, right: -142, zIndex: 40, background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 9, padding: '9px 8px', width: 135, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' },

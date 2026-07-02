@@ -187,7 +187,7 @@ def wi_row(id, title, domain, assignee, col, risk, ctx_id, next_action, gate,
            rde, morning, bounced, gate_perm, gate_stops, ctx, ho, ev,
            rde_audit=None, github_links=None, created_at=NOW,
            audit_required=False, reviewer="", deviation_risk="low", drift_note="",
-           source="manual", source_ref=""):
+           source="manual", source_ref="", project=""):
     return (
         id, title, domain, assignee, col, COL_STATUS[col], risk, ctx_id,
         next_action, gate,
@@ -198,7 +198,7 @@ def wi_row(id, title, domain, assignee, col, risk, ctx_id, next_action, gate,
         None, 0, "",
         j(github_links) if github_links else "[]",
         1 if audit_required else 0, reviewer, deviation_risk, drift_note,
-        source, source_ref,
+        source, source_ref, project,
         created_at, created_at,
     )
 
@@ -1362,10 +1362,14 @@ def main():
                agent_picked_up_at, agent_escalated, escalation_reason,
                github_links_json,
                audit_required, reviewer, deviation_risk, drift_note,
-               source, source_ref,
+               source, source_ref, project,
                created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, row)
+
+    # Set project labels
+    cur.execute("UPDATE work_items SET project='Kazane' WHERE project='' AND id NOT LIKE 'WI-BAO-%'")
+    cur.execute("UPDATE work_items SET project='AI番頭' WHERE project='' AND id LIKE 'WI-BAO-%'")
 
     for h in HANDOFFS:
         cur.execute("""

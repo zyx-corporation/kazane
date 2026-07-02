@@ -47,7 +47,7 @@ interface WorkItemDrawerProps {
   onRunRde: (id: string) => void;
   onAiRun: (id: string) => void;
   onAssignToAgent: (id: string) => void;
-  onEditItem: (id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string }) => void;
+  onEditItem: (id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string; project: string }) => void;
   onDeleteItem: (id: string) => void;
   onLoadEvents: (wiId: string) => Promise<WorkEvent[]>;
   onLinkGitHub: (wiId: string, url: string) => void;
@@ -63,7 +63,7 @@ interface WorkItemDrawerProps {
 
 export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab, onMoveItem, onBounce, onRunRde, onAiRun, onAssignToAgent, onEditItem, onDeleteItem, onLoadEvents, onLinkGitHub, onToggleMorning, onUpdateAudit, onEditCtx, onGoCtx, onGoCtxById, onGoHand, onGoRde, onGoGate }: WorkItemDrawerProps) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
+  const [draft, setDraft] = useState({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction, project: item.project ?? '' });
   const [ctxEditing, setCtxEditing] = useState(false);
   const [ctxDraft, setCtxDraft] = useState(item.ctx);
   const [events, setEvents] = useState<WorkEvent[]>([]);
@@ -92,7 +92,7 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
   }
 
   function cancelEdit() {
-    setDraft({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction });
+    setDraft({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction, project: item.project ?? '' });
     setEditing(false);
   }
 
@@ -121,7 +121,7 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {!editing && (
-                <button onClick={() => { setDraft({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction }); setEditing(true); }} style={s.iconBtn} title={t.btnEdit}>✏</button>
+                <button onClick={() => { setDraft({ title: item.title, domain: item.domain, assignee: item.assignee, risk: item.risk, nextAction: item.nextAction, project: item.project ?? '' }); setEditing(true); }} style={s.iconBtn} title={t.btnEdit}>✏</button>
               )}
               <button onClick={handleDelete} style={{ ...s.iconBtn, color: '#d96b6b' }} title={t.btnDelete}>🗑</button>
               <button onClick={onClose} style={s.closeBtn}>×</button>
@@ -154,6 +154,12 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
                 style={{ ...s.editInput, fontSize: 12 }}
                 placeholder="Next action"
               />
+              <input
+                value={draft.project}
+                onChange={e => setDraft(d => ({ ...d, project: e.target.value }))}
+                style={{ ...s.editInput, fontSize: 12 }}
+                placeholder="プロジェクト / 案件名"
+              />
               <div style={{ display: 'flex', gap: 7 }}>
                 <button onClick={saveEdit} style={s.saveBtn}>{t.btnSave}</button>
                 <button onClick={cancelEdit} style={s.cancelEditBtn}>{t.btnCancel}</button>
@@ -175,6 +181,9 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
                 )}
                 {item.source === 'calendar' && (
                   <span style={{ fontSize: 10, color: '#7ec9a4', background: '#151f1b', border: '1px solid #244035', padding: '2px 9px', borderRadius: 20 }}>予定</span>
+                )}
+                {item.project && (
+                  <span style={{ fontSize: 10, color: '#c8a0e8', background: '#1a1326', border: '1px solid #3d2656', padding: '2px 9px', borderRadius: 20 }}>{item.project}</span>
                 )}
               </div>
             </>

@@ -35,6 +35,17 @@ function loadLangFromStorage(): Lang {
   return 'ja';
 }
 
+const FONT_SIZES = [100, 120, 140, 160, 180, 200] as const;
+type FontSize = typeof FONT_SIZES[number];
+
+function loadFontSizeFromStorage(): FontSize {
+  try {
+    const v = parseInt(localStorage.getItem('kazane_font_size') ?? '', 10);
+    if ((FONT_SIZES as readonly number[]).includes(v)) return v as FontSize;
+  } catch (_) {}
+  return 100;
+}
+
 function loadItemsFromStorage(): WorkItem[] | null {
   try {
     const raw = localStorage.getItem('kazane_items');
@@ -93,10 +104,11 @@ export default function App() {
   const [gateDomain, setGateDomain] = useState('all');
   const [wiModalOpen, setWiModalOpen] = useState(false);
   const [ctxModalOpen, setCtxModalOpen] = useState(false);
-  const [form, setForm] = useState({ title: '', domain: '顧客対応', assignee: 'AI番頭' });
+  const [form, setForm] = useState({ title: '', domain: '顧客対応', assignee: 'AI番頭', project: '' });
   const [toast, setToast] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => loadLangFromStorage());
   const [langOpen, setLangOpen] = useState(false);
+  const [fontSize, setFontSize] = useState<FontSize>(() => loadFontSizeFromStorage());
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -113,7 +125,7 @@ export default function App() {
       }
       if (!isInput && e.key === 'n' && !e.metaKey && !e.ctrlKey) {
         setWiModalOpen(true);
-        setForm({ title: '', domain: '顧客対応', assignee: 'AI番頭' });
+        setForm({ title: '', domain: '顧客対応', assignee: 'AI番頭', project: '' });
       }
       if (!isInput && e.key === 'b' && !e.metaKey && !e.ctrlKey) nav('board');
       if (!isInput && e.key === 'd' && !e.metaKey && !e.ctrlKey) nav('dashboard');
@@ -263,7 +275,7 @@ export default function App() {
     }, 1400);
   }
 
-  function editItem(id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string }) {
+  function editItem(id: string, patch: { title: string; domain: string; assignee: string; risk: WorkItem['risk']; nextAction: string; project: string }) {
     let changed: WorkItem | undefined;
     const updated = items.map(i => {
       if (i.id !== id) return i;
@@ -419,7 +431,7 @@ export default function App() {
 
   function submitForm() {
     if (!form.title.trim()) { flash(t.toastNeedTitle); return; }
-    addItem({ title: form.title.trim(), domain: form.domain, assignee: form.assignee });
+    addItem({ title: form.title.trim(), domain: form.domain, assignee: form.assignee, project: form.project.trim() || undefined });
   }
 
   function addContext(title: string, question: string, cardType: import('./types').CardType = 'general', customerCompany = '') {
@@ -524,6 +536,17 @@ export default function App() {
     try { localStorage.setItem('kazane_lang', l); } catch (_) {}
   }
 
+  function changeFontSize(v: FontSize) {
+    setFontSize(v);
+    document.documentElement.style.fontSize = `${v}%`;
+    try { localStorage.setItem('kazane_font_size', String(v)); } catch (_) {}
+  }
+
+  // Apply persisted font size on mount
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${fontSize}%`;
+  }, []);
+
   async function resetDemo() {
     if (IS_TAURI && dbReady) {
       try {
@@ -556,6 +579,16 @@ export default function App() {
             <span style={{ color: '#9aa1ad' }}>{SCREEN_LABELS[screen]}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Font size selector */}
+            <select
+              value={fontSize}
+              onChange={e => changeFontSize(parseInt(e.target.value, 10) as FontSize)}
+              style={s.fontSizeSelect}
+            >
+              {FONT_SIZES.map(v => (
+                <option key={v} value={v}>{v}%</option>
+              ))}
+            </select>
             <div style={{ position: 'relative' }}>
               <button onClick={() => setLangOpen(!langOpen)} style={s.langBtn}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa1ad" strokeWidth="2">
@@ -579,7 +612,7 @@ export default function App() {
             </div>
             <button onClick={exportItems} style={s.headerBtn}>{t.btnExportReport}</button>
             <button onClick={resetDemo} style={s.headerBtn}>{t.btnReset}</button>
-            <button onClick={() => { setWiModalOpen(true); setForm({ title: '', domain: '顧客対応', assignee: 'AI番頭' }); }} style={s.newItemBtn}>{t.btnNewItem}</button>
+            <button onClick={() => { setWiModalOpen(true); setForm({ title: '', domain: '顧客対応', assignee: 'AI番頭', project: '' }); }} style={s.newItemBtn}>{t.btnNewItem}</button>
           </div>
         </header>
 
@@ -676,6 +709,7 @@ const s: Record<string, React.CSSProperties> = {
   main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
   header: { height: 54, flexShrink: 0, borderBottom: '1px solid #262a33', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 22px', background: '#15181e' },
   breadcrumb: { display: 'flex', alignItems: 'center', gap: 9, fontSize: 11, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace" },
+  fontSizeSelect: { border: '1px solid #2d323d', background: '#1b1e25', color: '#c8cdd5', padding: '7px 10px 7px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', outline: 'none', WebkitAppearance: 'none', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0l4.5 6L9 0z' fill='%236a7078'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', paddingRight: 24 },
   langBtn: { display: 'flex', alignItems: 'center', gap: 7, border: '1px solid #2d323d', background: '#1b1e25', color: '#c8cdd5', padding: '7px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' },
   langDropdown: { position: 'absolute', top: 39, right: 0, background: '#1b1e25', border: '1px solid #2d323d', borderRadius: 9, padding: 5, minWidth: 132, zIndex: 80, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' },
   headerBtn: { border: '1px solid #2d323d', background: '#1b1e25', color: '#9aa1ad', padding: '7px 11px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' },

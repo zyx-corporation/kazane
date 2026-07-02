@@ -232,6 +232,12 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "add_project_to_work_items",
+            sql: "ALTER TABLE work_items ADD COLUMN project TEXT NOT NULL DEFAULT '';",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

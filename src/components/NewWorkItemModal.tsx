@@ -5,6 +5,7 @@ interface FormState {
   title: string;
   domain: string;
   assignee: string;
+  project: string;
 }
 
 interface NewWorkItemModalProps {
@@ -82,6 +83,16 @@ export function NewWorkItemModal({ form, t, onClose, onSetField, onSubmit }: New
               );
             })}
           </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={s.label}>プロジェクト / 案件名</div>
+          <input
+            value={form.project}
+            onChange={e => onSetField('project', e.target.value)}
+            placeholder="例: Kazane / ABC社案件（省略可）"
+            style={{ ...s.input, fontSize: 12 }}
+          />
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

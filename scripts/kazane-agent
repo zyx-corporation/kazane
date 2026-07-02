@@ -318,6 +318,7 @@ case "$cmd" in
     wi_risk="中"
     wi_next="AIが着手予定"
     wi_agent_id=""
+    wi_project=""
 
     shift
     while [[ $# -gt 0 ]]; do
@@ -329,12 +330,13 @@ case "$cmd" in
         --risk)     wi_risk="$2";     shift 2 ;;
         --next)     wi_next="$2";     shift 2 ;;
         --agent-id) wi_agent_id="$2"; shift 2 ;;
+        --project)  wi_project="$2";  shift 2 ;;
         *) echo "Unknown flag: $1" >&2; exit 1 ;;
       esac
     done
 
     if [ -z "$wi_title" ]; then
-      echo "Usage: kazane-agent create --title <title> [--domain <domain>] [--assignee <assignee>] [--ctx <CTX-ID>] [--risk 低|中|高] [--next <nextAction>] [--agent-id <id>]" >&2
+      echo "Usage: kazane-agent create --title <title> [--domain <domain>] [--assignee <assignee>] [--ctx <CTX-ID>] [--risk 低|中|高] [--next <nextAction>] [--agent-id <id>] [--project <name>]" >&2
       exit 1
     fi
     [ -n "$wi_agent_id" ] && _check_gate_stops "$wi_agent_id" "create"
@@ -345,10 +347,10 @@ case "$cmd" in
       exit 1
     fi
 
-    python3 - "$DB_PATH" "$wi_title" "$wi_domain" "$wi_assignee" "$wi_ctx" "$wi_risk" "$wi_next" <<'PYEOF'
+    python3 - "$DB_PATH" "$wi_title" "$wi_domain" "$wi_assignee" "$wi_ctx" "$wi_risk" "$wi_next" "$wi_project" <<'PYEOF'
 import sqlite3, json, sys, datetime
 
-db_path, title, domain, assignee, ctx_id, risk, next_action = sys.argv[1:8]
+db_path, title, domain, assignee, ctx_id, risk, next_action, project = sys.argv[1:9]
 
 gate = "AI権限内で着手可" if assignee in ("AI番頭", "AI Assistant", "Claude Code", "Codex", "ローカルLLM") else "人間レビュー待ち"
 now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -381,12 +383,12 @@ try:
         """INSERT INTO work_items
            (id, title, domain, assignee, col, status, risk, context_id, next_action,
             gate, rde, morning, bounced, gate_perm, gate_stops,
-            ctx_json, ho_json, ev_json, github_links_json, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?)
+            ctx_json, ho_json, ev_json, github_links_json, project, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,'[]','[]',?,?,?)
            ON CONFLICT(id) DO NOTHING""",
         (wi_id, title, domain, assignee, "inbox", "Inbox", risk, ctx_id, next_action,
          gate, "整理・下調べ・草案", "外部送信／契約／金銭／専門家判断",
-         ctx_json, ho_json, now, now),
+         ctx_json, ho_json, project, now, now),
     )
     con.commit()
     print(f"Created: {wi_id} — {title}")
@@ -538,7 +540,7 @@ PYEOF
     fi
 
     shift 2
-    upd_col="" upd_title="" upd_assignee="" upd_risk="" upd_next="" upd_agent_id=""
+    upd_col="" upd_title="" upd_assignee="" upd_risk="" upd_next="" upd_agent_id="" upd_project=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --col)      upd_col="$2";      shift 2 ;;
@@ -547,15 +549,16 @@ PYEOF
         --risk)     upd_risk="$2";     shift 2 ;;
         --next)     upd_next="$2";     shift 2 ;;
         --agent-id) upd_agent_id="$2"; shift 2 ;;
+        --project)  upd_project="$2";  shift 2 ;;
         *) echo "Unknown flag: $1" >&2; exit 1 ;;
       esac
     done
     [ -n "$upd_agent_id" ] && _check_gate_stops "$upd_agent_id" "update"
 
-    python3 - "$DB_PATH" "$wi_id" "$upd_col" "$upd_title" "$upd_assignee" "$upd_risk" "$upd_next" <<'PYEOF'
+    python3 - "$DB_PATH" "$wi_id" "$upd_col" "$upd_title" "$upd_assignee" "$upd_risk" "$upd_next" "$upd_project" <<'PYEOF'
 import sqlite3, json, sys, datetime
 
-db_path, wi_id, col, title, assignee, risk, next_action = sys.argv[1:8]
+db_path, wi_id, col, title, assignee, risk, next_action, project = sys.argv[1:9]
 
 COL_STATUS = {
     "inbox": "Inbox", "ai": "AI Working",
@@ -573,6 +576,8 @@ if risk:
     sets += ["risk=?"]; vals.append(risk)
 if next_action:
     sets += ["next_action=?"]; vals.append(next_action)
+if project:
+    sets += ["project=?"]; vals.append(project)
 
 if not sets:
     print("Nothing to update — specify at least one flag.", file=sys.stderr)
@@ -586,7 +591,7 @@ con.commit()
 if cur.rowcount == 0:
     print(f"Not found: {wi_id}", file=sys.stderr); sys.exit(1)
 print(f"Updated: {wi_id}")
-for f, v in zip(["col","title","assignee","risk","next"], [col,title,assignee,risk,next_action]):
+for f, v in zip(["col","title","assignee","risk","next","project"], [col,title,assignee,risk,next_action,project]):
     if v: print(f"  {f} → {v}")
 con.close()
 PYEOF

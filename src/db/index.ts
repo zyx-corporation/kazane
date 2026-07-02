@@ -28,9 +28,9 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
         agent_picked_up_at, agent_escalated, escalation_reason,
         github_links_json,
         audit_required, reviewer, deviation_risk, drift_note,
-        source, source_ref,
+        source, source_ref, project,
         updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,datetime('now'))
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        title=$2, domain=$3, assignee=$4, col=$5, status=$6, risk=$7,
        context_id=$8, next_action=$9, gate=$10, rde=$11, morning=$12, bounced=$13,
@@ -39,7 +39,7 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
        agent_picked_up_at=$20, agent_escalated=$21, escalation_reason=$22,
        github_links_json=$23,
        audit_required=$24, reviewer=$25, deviation_risk=$26, drift_note=$27,
-       source=$28, source_ref=$29,
+       source=$28, source_ref=$29, project=$30,
        updated_at=datetime('now')`,
     [
       item.id, item.title, item.domain, item.assignee, item.col, item.status,
@@ -58,6 +58,7 @@ export async function dbUpsertItem(item: WorkItem): Promise<void> {
       item.driftNote ?? '',
       item.source ?? 'manual',
       item.sourceRef ?? '',
+      item.project ?? '',
     ],
   );
 }
@@ -274,6 +275,7 @@ function rowToItem(r: Record<string, unknown>): WorkItem {
     driftNote: r.drift_note as string | undefined || undefined,
     source: (r.source as WorkItemSource | undefined) ?? 'manual',
     sourceRef: r.source_ref as string | undefined || undefined,
+    project: r.project as string | undefined || '',
   };
 }
 

@@ -87,6 +87,8 @@ export interface WorkItem {
   // v0.7: source tracking
   source?: WorkItemSource;
   sourceRef?: string;
+  // v0.8: project label
+  project?: string;
 }
 
 export interface EnrichedWorkItem extends WorkItem {
