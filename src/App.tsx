@@ -138,21 +138,47 @@ export default function App() {
   const enriched: EnrichedWorkItem[] = items.map(enrichItem);
   const selItem = enriched.find(i => i.id === selId) ?? null;
 
-  // Load from SQLite on mount (Tauri only)
+  // SQLite is the source of truth in Tauri. Poll it so CLI/MCP writes appear
+  // without requiring an application restart.
   useEffect(() => {
     if (!IS_TAURI) return;
     let cancelled = false;
-    Promise.all([dbListItems(), dbListContextCards(), dbListHandoffs(), dbListEvidenceLog(), dbListGateRules(), dbListAgentProfiles()]).then(([rows, ctxRows, hoRows, evRows, gateRows, agentRows]) => {
-      if (cancelled) return;
-      setItems(rows);
-      setContexts(ctxRows);
-      setHandoffs(hoRows);
-      setEvidenceLog(evRows);
-      setGateRules(gateRows);
-      setAgentProfiles(agentRows);
-      setDbReady(true);
-    }).catch(() => { if (!cancelled) setDbReady(false); });
-    return () => { cancelled = true; };
+
+    async function refreshFromDb() {
+      try {
+        const [rows, ctxRows, hoRows, evRows, gateRows, agentRows] = await Promise.all([
+          dbListItems(), dbListContextCards(), dbListHandoffs(), dbListEvidenceLog(),
+          dbListGateRules(), dbListAgentProfiles(),
+        ]);
+        if (cancelled) return;
+        setItems(rows);
+        setContexts(ctxRows);
+        setHandoffs(hoRows);
+        setEvidenceLog(evRows);
+        setGateRules(gateRows);
+        setAgentProfiles(agentRows);
+        setDbReady(true);
+      } catch (_) {
+        if (!cancelled) setDbReady(false);
+      }
+    }
+
+    const refreshOnFocus = () => { void refreshFromDb(); };
+    const refreshOnVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshFromDb();
+    };
+
+    void refreshFromDb();
+    const interval = window.setInterval(() => { void refreshFromDb(); }, 3_000);
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnVisibility);
+    };
   }, []);
 
   const persist = useCallback((updated: WorkItem[], changed?: WorkItem) => {
