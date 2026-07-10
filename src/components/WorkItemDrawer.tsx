@@ -182,6 +182,9 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
                 {item.source === 'calendar' && (
                   <span style={{ fontSize: 10, color: '#7ec9a4', background: '#151f1b', border: '1px solid #244035', padding: '2px 9px', borderRadius: 20 }}>予定</span>
                 )}
+                {item.source === 'github' && (
+                  <span style={{ fontSize: 10, color: '#b8c1d1', background: '#181c24', border: '1px solid #343b49', padding: '2px 9px', borderRadius: 20 }}>GitHub Issue</span>
+                )}
                 {item.project && (
                   <span style={{ fontSize: 10, color: '#c8a0e8', background: '#1a1326', border: '1px solid #3d2656', padding: '2px 9px', borderRadius: 20 }}>{item.project}</span>
                 )}

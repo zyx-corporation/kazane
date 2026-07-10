@@ -100,7 +100,7 @@ export interface EnrichedWorkItem extends WorkItem {
 }
 
 export type CardType = 'general' | 'customer';
-export type WorkItemSource = 'manual' | 'gmail' | 'calendar';
+export type WorkItemSource = 'manual' | 'gmail' | 'calendar' | 'github';
 
 export interface ContextCard {
   id: string;

@@ -22,6 +22,7 @@
 #   kazane-agent dirs                           — print task/handoff directory paths
 #   kazane-agent mail-import [opts]             — import a Gmail thread as a Work Item
 #   kazane-agent calendar-import [opts]         — import a calendar event as a Work Item
+#   kazane-agent sync-github-issues [opts]       — sync all open/closed GitHub Issues into Work Items
 #   kazane-agent banto-demo                     — print AI番頭 demo flow guide
 #
 # create options:
@@ -69,6 +70,11 @@
 #   --domain <text>      Domain (default: 会議)
 #   --ctx <CTX-ID>       Context Card ID to link
 #   --wi <WI-ID>         Existing Work Item to annotate (instead of creating new)
+#
+# sync-github-issues options:
+#   --repo <owner/repo>  GitHub repository (default: zyx-corporation/kazane)
+#   --project <name>     Kazane project label (default: Kazane)
+#   --assignee <name>    Fallback assignee when Issue has none (default: Tomoyuki Kano)
 #
 # Directory locations (macOS):
 #   Tasks:    ~/Library/Application Support/jp.zyxcorp.kazane/tasks/
@@ -863,6 +869,149 @@ try:
         print(f"  DB: {db_path}")
 finally:
     con.close()
+PYEOF
+    ;;
+
+  sync-github-issues)
+    gh_repo="zyx-corporation/kazane"
+    gh_project="Kazane"
+    gh_assignee="Tomoyuki Kano"
+
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --repo)     gh_repo="$2";     shift 2 ;;
+        --project)  gh_project="$2";  shift 2 ;;
+        --assignee) gh_assignee="$2"; shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2; exit 1
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+      echo "Error: gh CLI is required" >&2; exit 1
+    fi
+
+    issues_json=$(mktemp)
+    trap 'rm -f "$issues_json"' EXIT
+    gh issue list --repo "$gh_repo" --state all --limit 500 \
+      --json number,title,state,labels,assignees,createdAt,updatedAt,closedAt,url,milestone,body \
+      > "$issues_json"
+
+    python3 - "$DB_PATH" "$issues_json" "$gh_repo" "$gh_project" "$gh_assignee" <<'PYEOF'
+import datetime
+import json
+import sqlite3
+import sys
+
+db_path, issues_path, repo, project, fallback_assignee = sys.argv[1:6]
+issues = json.load(open(issues_path, encoding="utf-8"))
+now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+def label_names(issue):
+    return [label.get("name", "") for label in issue.get("labels", []) if label.get("name")]
+
+def risk_for(labels):
+    lowered = " ".join(labels).lower()
+    if any(word in lowered for word in ("critical", "security", "high", "重大")):
+        return "高"
+    if any(word in lowered for word in ("bug", "priority", "medium", "重要")):
+        return "中"
+    return "低"
+
+con = sqlite3.connect(db_path)
+created = updated = open_count = closed_count = 0
+try:
+    for issue in issues:
+        number = int(issue["number"])
+        wi_id = f"WI-GH-{number}"
+        is_closed = issue["state"] == "CLOSED"
+        col = "done" if is_closed else "inbox"
+        status = "Done / Logged" if is_closed else "Inbox"
+        open_count += 0 if is_closed else 1
+        closed_count += 1 if is_closed else 0
+        labels = label_names(issue)
+        milestone = (issue.get("milestone") or {}).get("title", "")
+        assignees = issue.get("assignees") or []
+        assignee = assignees[0].get("login", fallback_assignee) if assignees else fallback_assignee
+        title = f"GitHub #{number}: {issue['title']}"
+        body = (issue.get("body") or "").strip()
+        unresolved = " / ".join(labels) if labels else ("対応内容を確認" if not is_closed else "なし")
+        purpose = f"{repo} Issue #{number} の進捗をKazaneで追跡する。"
+        context = f"GitHub state={issue['state']}"
+        if milestone:
+            context += f" / milestone={milestone}"
+        ctx = {
+            "question": issue["title"],
+            "purpose": purpose,
+            "context": context,
+            "constraint": "GitHub 上の状態を正とし、同期コマンドで更新する。",
+            "past": body[:2000],
+            "unresolved": unresolved,
+        }
+        ho = {
+            "did": f"GitHub Issue #{number} を同期。" + ("Closed を確認。" if is_closed else "Open のため対応待ち。"),
+            "judged": "GitHub 上で Closed。" if is_closed else "",
+            "couldnt": "" if is_closed else "対応・完了判断は未実施。",
+            "uncertain": "GitHub Issue 本文・コメントを参照。" if not is_closed else "なし。",
+            "bounce": "",
+            "next": "完了・記録済" if is_closed else f"GitHub Issue #{number} を対応する。",
+        }
+        evidence = [{"type": "GitHub", "label": f"Issue #{number}", "trust": "高", "store": issue["url"]}]
+        link = [{
+            "url": issue["url"], "type": "issue", "owner": repo.split("/", 1)[0],
+            "repo": repo.split("/", 1)[1], "number": number, "title": issue["title"],
+            "state": issue["state"].lower(), "fetchedAt": now,
+        }]
+        existing = con.execute("SELECT col FROM work_items WHERE id=?", (wi_id,)).fetchone()
+        if existing:
+            updated += 1
+        else:
+            created += 1
+
+        con.execute(
+            """INSERT INTO work_items
+               (id,title,domain,assignee,col,status,risk,context_id,next_action,gate,
+                rde,morning,bounced,gate_perm,gate_stops,ctx_json,ho_json,ev_json,
+                github_links_json,audit_required,reviewer,deviation_risk,drift_note,
+                source,source_ref,project,created_at,updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,0,0,0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(id) DO UPDATE SET
+                 title=excluded.title, assignee=excluded.assignee, col=excluded.col,
+                 status=excluded.status, risk=excluded.risk, next_action=excluded.next_action,
+                 ctx_json=excluded.ctx_json, ho_json=excluded.ho_json, ev_json=excluded.ev_json,
+                 github_links_json=excluded.github_links_json, source=excluded.source,
+                 source_ref=excluded.source_ref, project=excluded.project,
+                 updated_at=excluded.updated_at""",
+            (
+                wi_id, title, "開発", assignee, col, status, risk_for(labels), "—",
+                "完了・記録済" if is_closed else f"GitHub Issue #{number} を対応",
+                "PRマージ・外部公開は人間判断", "調査・実装・テスト・PR下書き",
+                "PRマージ／本番反映／破壊的変更", json.dumps(ctx, ensure_ascii=False),
+                json.dumps(ho, ensure_ascii=False), json.dumps(evidence, ensure_ascii=False),
+                json.dumps(link, ensure_ascii=False), 0, "", "low", "", "github",
+                issue["url"], project, issue["createdAt"], issue["updatedAt"],
+            ),
+        )
+
+        event_id = f"EV-GH-{number}-{issue['state']}"
+        con.execute(
+            """INSERT OR REPLACE INTO events
+               (id,wi_id,event_type,from_col,to_col,actor,note,created_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (event_id, wi_id, "moved" if is_closed else "created", "", col,
+             "GitHub Sync", f"Issue #{number} {issue['state']}", issue["updatedAt"]),
+        )
+    con.commit()
+finally:
+    con.close()
+
+print(f"Synced {len(issues)} issues from {repo}")
+print(f"  Open: {open_count} -> Inbox")
+print(f"  Closed: {closed_count} -> Done / Logged")
+print(f"  Created: {created}  Updated: {updated}")
 PYEOF
     ;;
 

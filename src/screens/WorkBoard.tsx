@@ -159,6 +159,7 @@ function WorkCard({ item, menuOpen, onOpen, onMenuToggle, onMove, currentCol }: 
           {stale && <span style={s.staleChip}>停滞 {STALE_DAYS}d+</span>}
           {item.source === 'gmail' && <span style={s.gmailChip}>メール</span>}
           {item.source === 'calendar' && <span style={s.calChip}>予定</span>}
+          {item.source === 'github' && <span style={s.githubChip}>GitHub</span>}
           {item.project && <span style={s.projectChip}>{item.project}</span>}
         </div>
         <div style={s.tagRow}>
@@ -213,6 +214,7 @@ const s: Record<string, React.CSSProperties> = {
   rdeChip: { fontSize: 9.5, color: '#b6a6ee', background: '#1d1a29', border: '1px solid #322c47', padding: '3px 7px', borderRadius: 5 },
   staleChip: { fontSize: 9.5, color: '#a89464', background: '#241f16', border: '1px solid #3a3220', padding: '3px 7px', borderRadius: 5 },
   gmailChip: { fontSize: 9.5, color: '#8abfe0', background: '#151e28', border: '1px solid #243349', padding: '3px 7px', borderRadius: 5 },
+  githubChip: { fontSize: 9.5, color: '#b8c1d1', background: '#181c24', border: '1px solid #343b49', padding: '3px 7px', borderRadius: 5 },
   calChip: { fontSize: 9.5, color: '#7ec9a4', background: '#151f1b', border: '1px solid #244035', padding: '3px 7px', borderRadius: 5 },
   projectChip: { fontSize: 9.5, color: '#c8a0e8', background: '#1a1326', border: '1px solid #3d2656', padding: '3px 7px', borderRadius: 5 },
   tagRow: { display: 'flex', gap: 4, paddingTop: 2, borderTop: '1px solid #23272f' },

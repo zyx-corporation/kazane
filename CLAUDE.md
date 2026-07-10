@@ -118,10 +118,11 @@ kazane-agent status                             # プロジェクト全体状況
 kazane-agent read <WI-ID>                       # WI詳細をJSON出力
 kazane-agent create --title "..." --domain 開発 # 新規WI作成
 kazane-agent update <WI-ID> --col ai           # フィールド更新
+kazane-agent sync-github-issues --repo zyx-corporation/kazane  # Open/Closed Issueを同期
 kazane-agent report-test --tool tsc --result pass --wi WI-401  # テスト結果をEV記録
 kazane-agent submit <WI-ID>                     # Handoff提出（10秒でアプリが自動取込）
 ```
-※ DB操作系（create/update/report-test/status/read）はアプリを開いたままでも使用可。  
+※ DB操作系（create/update/sync-github-issues/report-test/status/read）はアプリを開いたままでも使用可。  
 ※ `kazane-import-dev` だけはアプリを閉じて実行すること。
 
 ---
