@@ -87,6 +87,8 @@ Chronicle Replay検証です。
 
 ローカルビルドとインストールは
 [docs/local-deployment.md](docs/local-deployment.md) を参照してください。
+空白状態から最初の業務を作る手順は
+[docs/start-guide.md](docs/start-guide.md) を参照してください。
 
 ## リポジトリとブランチ方針
 

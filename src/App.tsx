@@ -9,6 +9,8 @@ import { Toast } from './components/Toast';
 import { WorkItemDrawer } from './components/WorkItemDrawer';
 import { NewWorkItemModal } from './components/NewWorkItemModal';
 import { NewContextCardModal } from './components/NewContextCardModal';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import type { OnboardingResult } from './components/OnboardingWizard';
 import { FlowDashboard } from './screens/FlowDashboard';
 import { WorkBoard } from './screens/WorkBoard';
 import { ContextCards } from './screens/ContextCards';
@@ -104,6 +106,7 @@ export default function App() {
   const [gateDomain, setGateDomain] = useState('all');
   const [wiModalOpen, setWiModalOpen] = useState(false);
   const [ctxModalOpen, setCtxModalOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [form, setForm] = useState({ title: '', domain: '顧客対応', assignee: 'AI番頭', project: '' });
   const [toast, setToast] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => loadLangFromStorage());
@@ -481,6 +484,54 @@ export default function App() {
     flash(`${id} Context Card を追加しました`);
   }
 
+  function completeOnboarding(result: OnboardingResult) {
+    const contextId = nextCtxId(contexts);
+    const itemId = nextId(items);
+    const template = DOMAIN_TEMPLATES[result.domain];
+    const contextData: WorkItem['ctx'] = {
+      question: result.challenge,
+      purpose: `${result.organization}の「${result.project}」で、最初の業務フローを整理する。`,
+      context: `組織: ${result.organization} / 案件・テーマ: ${result.project} / 業務領域: ${result.domain}`,
+      constraint: result.boundary,
+      unresolved: result.challenge,
+    };
+    const card: ContextCard = {
+      id: contextId,
+      title: `${result.project} — 業務診断`,
+      question: result.challenge,
+      purpose: contextData.purpose,
+      context: contextData.context ?? '',
+      constraint: result.boundary,
+      past: 'Start Guideから作成。',
+      relatedWI: [itemId], relatedEv: [], unresolved: [result.challenge],
+      nextPolicy: '最初のWork Item完了後に、実際の業務フローと責任境界を更新する。',
+      cardType: 'general',
+    };
+    const item: WorkItem = {
+      id: itemId, title: `${result.project}: 最初の業務フローを整理`,
+      domain: result.domain, assignee: 'AI番頭', project: result.project,
+      col: 'inbox', status: COL_NAMES.inbox, risk: '中', contextId,
+      nextAction: '背景・現在の流れ・人が判断する境界を整理する',
+      gate: template?.gate ?? 'AI権限内で整理可', rde: false, morning: true, bounced: false,
+      gatePerm: template?.gatePerm ?? '整理・下調べ・草案', gateStops: result.boundary,
+      ctx: contextData,
+      ho: template?.ho ?? { did: '未着手。', uncertain: result.boundary, bounce: '—', next: 'AI番頭が現状を整理し、人へHandoffする。' },
+      ev: [], source: 'manual',
+    };
+    setContexts([card, ...contexts]);
+    setItems([item, ...items]);
+    if (IS_TAURI && dbReady) {
+      dbUpsertContextCard(card).catch(() => {});
+      dbUpsertItem(item).catch(() => {});
+      dbAddEvent({ id: makeEventId(), wiId: itemId, eventType: 'created', actor: 'Start Guide', note: `${contextId}から作成`, createdAt: new Date().toISOString() }).catch(() => {});
+    }
+    setOnboardingOpen(false);
+    setScreen('board');
+    setSelId(itemId);
+    setTab('context');
+    flash(`${contextId} と ${itemId} を作成しました`);
+  }
+
   function promoteUnresolved(text: string, domain: string, contextId: string) {
     addItem({ title: text + '（未解決点から）', domain: domain || '調査', assignee: 'AI Assistant', contextId });
     setScreen('board');
@@ -598,7 +649,7 @@ export default function App() {
 
   return (
     <div style={s.root}>
-      <Sidebar current={screen} lang={lang} t={t} onNav={nav} />
+      <Sidebar current={screen} lang={lang} t={t} onNav={nav} onOnboarding={() => setOnboardingOpen(true)} />
 
       <main style={s.main}>
         {/* Header */}
@@ -725,6 +776,10 @@ export default function App() {
           onClose={() => setCtxModalOpen(false)}
           onSubmit={addContext}
         />
+      )}
+
+      {onboardingOpen && (
+        <OnboardingWizard lang={lang} onClose={() => setOnboardingOpen(false)} onComplete={completeOnboarding} />
       )}
 
       {/* Toast */}
