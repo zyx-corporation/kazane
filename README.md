@@ -79,9 +79,9 @@ SQLite-backed Work Items, Context Cards, Handoff Notes, Evidence and RDE views,
 GitHub Issue synchronization, an agent CLI, an MCP server, agent routing,
 concurrency locks, and a local push notification broker.
 
-The remaining v0.8 work is Phase A control/privilege process separation and the
-external-beta workflow: partner onboarding, feedback capture, and Chronicle
-Replay validation.
+The remaining v0.8 work is the external-beta workflow: partner onboarding,
+feedback capture, and Chronicle Replay validation. Phase A local process
+separation is implemented for `kazaned`, `kazane-privd`, and `kazane-agentd`.
 
 See [docs/roadmap.md](docs/roadmap.md).
 

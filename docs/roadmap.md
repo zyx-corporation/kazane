@@ -251,11 +251,11 @@ Exit criteria:
 - external feedback is captured as Context, not only feature requests;
 - users can replay the provenance of at least one work item or decision.
 
-Current state (2026-07-11): MCP, routing, locking, and local push notifications
-have passed local E2E verification. Process separation remains incomplete:
-`kazane-agentd` is separated, while `kazaned` and `kazane-privd` are not yet
-implemented. Partner onboarding, feedback capture, and Chronicle Replay remain
-after the infrastructure track.
+Current state (2026-07-11): MCP, routing, locking, local push notifications,
+and Phase A process separation have passed local E2E verification. MCP writes
+are routed through `kazaned`; `kazane-privd` applies default-deny authorization
+and records every decision. Partner onboarding, feedback capture, and Chronicle
+Replay remain after the infrastructure track.
 
 ## v0.9 utsuwa / 器
 

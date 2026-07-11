@@ -108,6 +108,10 @@ Responsibilities:
 
 The orchestrator should not be treated as a mere API server. It is the process that preserves Kazane's meaning model.
 
+Phase A runs `scripts/kazaned` as a separate local Unix-socket service. MCP
+read operations remain read-only SQLite queries, while create/update/Handoff/
+Evidence/Mail/Calendar writes are sent to `kazaned` as typed JSON operations.
+
 ### `kazane-privd` — Privilege Manager
 
 The privilege manager is isolated from the agent runtime. It evaluates privileged operation requests and executes only typed, policy-approved operations.
@@ -122,6 +126,11 @@ Responsibilities:
 - denial and escalation.
 
 Agent runtimes should not receive direct access to secrets or arbitrary privileged operations.
+
+Phase A runs `scripts/kazane-privd` separately. It authorizes only known typed
+operations from known Agent Profiles, applies Gate stops, defaults to deny, and
+records allow/deny decisions. Secret access and privileged execution are not
+implemented in Phase A.
 
 ### `kazane-agentd-local` — Local Agent Runtime
 

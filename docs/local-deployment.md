@@ -41,11 +41,15 @@ open -a /Applications/Kazane.app
 
 The database is migrated in place when the new application starts.
 
-## Start the local agent notification process
+## Start the local runtime processes
 
 ```bash
 scripts/kazane-agentd start
+scripts/kazane-privd start
+scripts/kazaned start
 scripts/kazane-agentd status
+scripts/kazane-privd status
+scripts/kazaned status
 ```
 
 Agents can then wait for assignments without polling:
@@ -55,7 +59,8 @@ scripts/kazane-agent watch --timeout 300
 ```
 
 If `kazane-agentd` is unavailable, `watch` falls back to the durable task-file
-queue. Stop the daemon with `scripts/kazane-agentd stop`.
+queue. `kazane-mcp` starts `kazaned` and `kazane-privd` when needed, but explicit
+startup makes process state visible to the operator.
 
 ## Verify the installed application
 
@@ -69,7 +74,7 @@ notarization are required before distribution to other users.
 
 ## Roll back
 
-1. Close Kazane and stop `kazane-agentd`.
+1. Close Kazane and stop `kazaned`, `kazane-privd`, and `kazane-agentd`.
 2. Replace `/Applications/Kazane.app` with the previous application bundle.
 3. Restore the corresponding `kazane.db.backup-*` only when a schema rollback
    is required; application rollback alone should not modify the database.

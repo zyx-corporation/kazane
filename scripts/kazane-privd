@@ -1,0 +1,4 @@
+#!/usr/bin/env python3
+from kazane_control import daemon_main
+
+raise SystemExit(daemon_main("kazane-privd"))
