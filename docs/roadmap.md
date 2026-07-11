@@ -224,6 +224,17 @@ Exit criteria:
 
 External beta.
 
+Implementation is split into two tracks. The orchestration infrastructure is
+completed before exposing the external-beta workflow to trial users.
+
+Orchestration infrastructure:
+
+- Kazane MCP server;
+- agent-to-agent Handoff routing;
+- concurrent pickup locks;
+- local push notification broker (`kazane-agentd`);
+- Phase A control-plane and privilege separation.
+
 Features:
 
 - partner feedback workflow;
@@ -239,6 +250,12 @@ Exit criteria:
 - one partner or trial user can understand the workflow;
 - external feedback is captured as Context, not only feature requests;
 - users can replay the provenance of at least one work item or decision.
+
+Current state (2026-07-11): MCP, routing, locking, and local push notifications
+have passed local E2E verification. Process separation remains incomplete:
+`kazane-agentd` is separated, while `kazaned` and `kazane-privd` are not yet
+implemented. Partner onboarding, feedback capture, and Chronicle Replay remain
+after the infrastructure track.
 
 ## v0.9 utsuwa / 器
 

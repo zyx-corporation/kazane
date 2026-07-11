@@ -74,16 +74,18 @@ Kazane は、AI Native Development の有用なインタラクション設計を
 
 ## 現在の状態
 
-Kazane は構想・プロトタイプ段階です。
+Kazane は `v0.8 hibiki / 響き` の開発段階です。現在のmacOSアプリには、
+SQLite永続化、Work Item・Context Card・Handoff・Evidence・RDE、GitHub
+Issue同期、Agent CLI、MCP Server、エージェント間ルーティング、同時処理
+ロック、ローカルPush通知ブローカーが実装されています。
 
-想定する初期リリースは以下です。
-
-- `v0.0 kiri / 霧`: Tauriベースの構想と6画面プロトタイプ。
-- `v0.1 shirushi / 記し`: 仕事の発生点と文脈を記録する社内MVP。
-- `v0.2 nagare / 流れ`: AIエージェントが自分宛の業務タスクを拾い、Handoffを返す。
-- `v0.3 tsuzuri / 綴り`: 作業、会話、判断、成果を来歴として編む。
+v0.8の残務は、Phase Aのコントロール／権限プロセス分離と、パートナー向け
+オンボーディング・フィードバック記録・Chronicle Replay検証です。
 
 詳細は [docs/roadmap.md](docs/roadmap.md) を参照してください。
+
+ローカルビルドとインストールは
+[docs/local-deployment.md](docs/local-deployment.md) を参照してください。
 
 ## リポジトリとブランチ方針
 

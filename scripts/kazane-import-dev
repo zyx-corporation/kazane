@@ -348,11 +348,11 @@ WORK_ITEMS = [
         created_at="2026-06-28T03:01:57",
     ),
 
-    # ── v0.4 michi ── Inbox
+    # ── v0.4 michi ── Done
     wi_row(
         "WI-401", "v0.4: GitHub Issue/PR連携 — KazaneでGitHub情報を参照・リンクする",
-        "開発", "Claude Code", "ai", "中", "CTX-V04",
-        "PRレビュー・マージ待ち", "公開API変更・本番反映はTomoyukiが判断",
+        "開発", "Claude Code", "done", "中", "CTX-V04",
+        "完了・記録済", "公開API変更・本番反映はTomoyukiが判断",
         False, True, False,
         "設計・実装・テスト・PR下書き",
         "本番反映／破壊的変更／公開API変更",
@@ -379,8 +379,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-402", "v0.4: CLI/MCPプロトタイプ — エージェントツール基盤",
-        "開発", "Claude Code", "ai", "中", "CTX-V04",
-        "PRレビュー・マージ待ち", "外部公開・本番反映はTomoyukiが判断",
+        "開発", "Claude Code", "done", "中", "CTX-V04",
+        "完了・記録済", "外部公開・本番反映はTomoyukiが判断",
         False, False, False,
         "設計・実装・プロトタイプ",
         "外部公開／本番反映／セキュリティ影響",
@@ -407,8 +407,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-403", "v0.4: 開発エージェントロール定義 — Tech Lead/QA/Reviewer/RDE",
-        "開発", "Tomoyuki Kano", "ai", "中", "CTX-ADR004",
-        "PRレビュー・マージ待ち", "ロール設計はTomoyukiが最終判断",
+        "開発", "Tomoyuki Kano", "done", "中", "CTX-ADR004",
+        "完了・記録済", "ロール設計はTomoyukiが最終判断",
         False, False, False,
         "ロール設計・権限定義・ドキュメント",
         "権限付与の最終決定／外部公開",
@@ -435,8 +435,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-404", "v0.4: テスト結果エビデンススキーマ設計",
-        "開発", "Claude Code", "ai", "低", "CTX-V04",
-        "PRレビュー・マージ待ち", "本番反映はTomoyukiが判断",
+        "開発", "Claude Code", "done", "低", "CTX-V04",
+        "完了・記録済", "本番反映はTomoyukiが判断",
         False, False, False,
         "スキーマ設計・実装",
         "本番反映／外部公開",
@@ -463,8 +463,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-405", "v0.4: 開発エスカレーション設計 — dev固有のGate条件",
-        "開発", "Tomoyuki Kano", "ai", "中", "CTX-V04",
-        "PRレビュー・マージ待ち", "Gate設計はTomoyukiが判断",
+        "開発", "Tomoyuki Kano", "done", "中", "CTX-V04",
+        "完了・記録済", "Gate設計はTomoyukiが判断",
         False, False, False,
         "Gate設計・条件定義",
         "Gate条件の最終決定",
@@ -798,8 +798,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-701", "v0.7 musubi/結び — AI番頭 メール・カレンダー・顧客Context連携",
-        "開発", "Tomoyuki Kano", "inbox", "低", "CTX-001",
-        "v0.7実装中", "外部サービス連携はTomoyukiが判断",
+        "開発", "Tomoyuki Kano", "done", "低", "CTX-001",
+        "完了・記録済", "外部サービス連携はTomoyukiが判断",
         False, False, False,
         "コンセプト設計・要件整理",
         "外部サービス連携／顧客データ処理",
@@ -819,11 +819,11 @@ WORK_ITEMS = [
         created_at="2026-06-28T09:00:00",
     ),
 
-    # ── v0.7 musubi ── In Progress
+    # ── v0.7 musubi ── Done
     wi_row(
         "WI-710", "v0.7: 顧客Context Card — card_type + customerフィールド (migration v9)",
-        "開発", "Claude Code", "ai", "低", "CTX-001",
-        "実装完了・コミット待ち", "—",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "migration + 型定義 + UI実装",
         "外部公開",
@@ -845,8 +845,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-711", "v0.7: Gmail→WI インポート — kazane-agent mail-import (source field, migration v10)",
-        "開発", "Claude Code", "ai", "低", "CTX-001",
-        "実装完了・コミット待ち", "—",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "CLIコマンド + DB + UI実装",
         "外部公開",
@@ -868,8 +868,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-712", "v0.7: Calendar→WI/Context — kazane-agent calendar-import",
-        "開発", "Claude Code", "ai", "低", "CTX-001",
-        "実装完了・コミット待ち", "—",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "CLIコマンド実装",
         "外部公開",
@@ -891,8 +891,8 @@ WORK_ITEMS = [
 
     wi_row(
         "WI-713", "v0.7: AI番頭デモフロー — banto-demo + 統合シナリオ",
-        "開発", "Claude Code", "ai", "低", "CTX-001",
-        "実装完了・コミット待ち", "—",
+        "開発", "Claude Code", "done", "低", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "デモシナリオ実装",
         "外部公開",
@@ -914,8 +914,8 @@ WORK_ITEMS = [
     # ── v0.8 hibiki/響き ───────────────────────────────────────────
     wi_row(
         "WI-801", "v0.8: Agent Push通知 — 新WI割り当て時にエージェントへ通知（ポーリング→Push）",
-        "開発", "Claude Code", "inbox", "中", "CTX-001",
-        "Push通知機構を設計・実装する", "—",
+        "開発", "Claude Code", "done", "中", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "整理・設計・PoC実装",
         "外部サービス連携／本番デプロイ",
@@ -925,7 +925,7 @@ WORK_ITEMS = [
             "constraint": "Tauriネイティブ側の制約を確認。外部サービス連携はTomoyukiが判断。",
             "unresolved": "Tauri eventシステム vs ファイルwatchのどちらが適切か。",
         },
-        ho={"did": "未着手。", "uncertain": "—", "bounce": "—", "next": "設計後に実装着手。"},
+        ho={"did": "kazane-agentd Unix socket通知ブローカー、Tauri/MCPからのnotify、kazane-agent watchのPush購読を実装しE2E確認。", "uncertain": "Windowsではフォールバックが必要。", "bounce": "—", "next": "完了・記録済。"},
         ev=[],
         created_at="2026-06-30T09:00:00",
     ),
@@ -948,8 +948,8 @@ WORK_ITEMS = [
     ),
     wi_row(
         "WI-803", "v0.8: Kazane MCP Server — 外部エージェントが read_wi/submit_handoff 等を呼べる口",
-        "開発", "Claude Code", "ai", "中", "CTX-001",
-        "scripts/kazane-mcp を完成させ動作確認する", "—",
+        "開発", "Claude Code", "done", "中", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "MCP実装・ツール定義・動作検証",
         "外部公開／認証設定",
@@ -970,8 +970,8 @@ WORK_ITEMS = [
     ),
     wi_row(
         "WI-804", "v0.8: エージェント間ルーティング — WI を Agent A → Agent B へ渡すフロー",
-        "開発", "Claude Code", "ai", "中", "CTX-001",
-        "nextAgent フィールドのE2Eフローを動作確認する", "—",
+        "開発", "Claude Code", "done", "中", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "実装・E2Eテスト",
         "外部エージェント本番接続",
@@ -992,8 +992,8 @@ WORK_ITEMS = [
     ),
     wi_row(
         "WI-805", "v0.8: 並列処理制御 — 複数エージェントの同一WI取得衝突を防止",
-        "開発", "Claude Code", "ai", "中", "CTX-001",
-        "ロック機構のE2Eテストを実施する", "—",
+        "開発", "Claude Code", "done", "中", "CTX-001",
+        "完了・記録済", "—",
         False, False, False,
         "実装・衝突テスト",
         "本番マルチエージェント環境",
@@ -1015,8 +1015,8 @@ WORK_ITEMS = [
     # ── AI番頭 実運用 WI ─────────────────────────────────────────────
     wi_row(
         "WI-BAO-001", "AI番頭: kazane-mcp 接続確認 — Claude Code から MCP 経由で WI を読み書きする",
-        "AI番頭", "AI番頭", "ai", "高", "CTX-011",
-        "uv run scripts/kazane-mcp を起動し .mcp.json 経由で動作確認する", "—",
+        "AI番頭", "AI番頭", "done", "高", "CTX-011",
+        "完了・記録済", "—",
         False, False, False,
         "MCP起動・list_work_items/read_work_item/submit_handoff 呼び出し確認",
         "外部サービス連携／顧客データ処理",
@@ -1026,7 +1026,7 @@ WORK_ITEMS = [
             "constraint": "uv / Python 3.12 が必要。.mcp.json を kazane プロジェクトルートに配置済み。",
             "unresolved": "認証・rate limit・エラー時の再試行ポリシー。",
         },
-        ho={"did": "未着手。", "uncertain": "—", "bounce": "—", "next": "uv run scripts/kazane-mcp を起動してツール一覧を確認する。"},
+        ho={"did": "Claude Codeからkazane-mcpへ接続し、WI読み書き・Evidence・Handoff永続化を確認。", "uncertain": "認証・rate limit・再試行は今後。", "bounce": "—", "next": "完了・記録済。"},
         ev=[],
         created_at="2026-07-01T09:00:00",
     ),
@@ -1318,7 +1318,8 @@ def main():
     print(f"{'[DRY RUN] ' if DRY else ''}Importing to: {DB_PATH}")
     print(f"  {len(CTX_CARDS)} Context Cards")
     print(f"  {len(WORK_ITEMS)} Work Items")
-    print(f"  {len(HANDOFFS)} Handoff Notes")
+    generated_handoffs = sum(1 for row in WORK_ITEMS if row[4] == "done" and row[0] not in {h["wi"].split(" ", 1)[0] for h in HANDOFFS})
+    print(f"  {len(HANDOFFS) + generated_handoffs} Handoff Notes ({len(HANDOFFS)} explicit, {generated_handoffs} generated from completed WIs)")
     print(f"  {len(EVIDENCE)} Evidence entries")
     print(f"  {len(EVENTS)} Events")
     print(f"  {len(GATE_RULES)} Gate Rules")
@@ -1384,6 +1385,28 @@ def main():
             h["bounce"], h["next"], h["upd_ctx"], h["ev_json"],
             h["gate"], h["ask"], h["escalated"], h["escalation_reason"],
             h["created_at"],
+        ))
+
+    # Every completed Work Item must retain an explicit Handoff Note after reset.
+    explicit_handoff_wis = {h["wi"].split(" ", 1)[0] for h in HANDOFFS}
+    for row in WORK_ITEMS:
+        wi_id, title, domain, assignee, col = row[0], row[1], row[2], row[3], row[4]
+        if col != "done" or wi_id in explicit_handoff_wis:
+            continue
+        ho = json.loads(row[16])
+        cur.execute("""
+            INSERT OR REPLACE INTO handoff_notes
+              (id, wi, assignee, domain, did, judged, couldnt, uncertain,
+               bounce, next, upd_ctx, ev_json, gate, ask,
+               escalated, escalation_reason, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            f"HO-SEED-{wi_id}", f"{wi_id} {title}", assignee, domain,
+            ho.get("did", "完了。"), ho.get("judged", "完了条件を満たした。"),
+            ho.get("couldnt", ""), ho.get("uncertain", ""), ho.get("bounce", ""),
+            ho.get("next", "完了・記録済"), ho.get("updCtx", ""),
+            json.dumps(ho.get("ev", []), ensure_ascii=False), ho.get("gate", ""),
+            ho.get("ask", ""), 0, "", row[30],
         ))
 
     for e in EVIDENCE:

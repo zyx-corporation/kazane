@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
@@ -261,13 +262,30 @@ async fn get_agent_dirs(app: tauri::AppHandle) -> Result<AgentDirs, String> {
 
 #[tauri::command]
 async fn write_agent_task(app: tauri::AppHandle, id: String, payload: String) -> Result<(), String> {
-    let tasks_dir = app.path().app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("tasks");
+    let base_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let tasks_dir = base_dir.join("tasks");
     std::fs::create_dir_all(&tasks_dir).map_err(|e| e.to_string())?;
     let path = tasks_dir.join(format!("{id}.json"));
-    std::fs::write(path, payload).map_err(|e| e.to_string())
+    std::fs::write(path, &payload).map_err(|e| e.to_string())?;
+    notify_agentd(&base_dir, &id, &payload);
+    Ok(())
 }
+
+#[cfg(unix)]
+fn notify_agentd(base_dir: &std::path::Path, id: &str, payload: &str) {
+    use std::os::unix::net::UnixStream;
+    let Ok(mut stream) = UnixStream::connect(base_dir.join("kazane-agentd.sock")) else {
+        return;
+    };
+    let event = serde_json::json!({
+        "type": "notify",
+        "event": { "type": "task_assigned", "id": id, "payload": payload }
+    });
+    let _ = writeln!(stream, "{event}");
+}
+
+#[cfg(not(unix))]
+fn notify_agentd(_base_dir: &std::path::Path, _id: &str, _payload: &str) {}
 
 #[tauri::command]
 async fn poll_agent_handoffs(app: tauri::AppHandle) -> Result<Vec<String>, String> {
@@ -298,9 +316,19 @@ async fn read_agent_handoff(app: tauri::AppHandle, id: String) -> Result<String,
         .map_err(|e| e.to_string())?
         .join("handoffs")
         .join(format!("{id}.json"));
-    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
-    Ok(content)
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn acknowledge_agent_handoff(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("handoffs")
+        .join(format!("{id}.json"));
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -321,6 +349,7 @@ pub fn run() {
             write_agent_task,
             poll_agent_handoffs,
             read_agent_handoff,
+            acknowledge_agent_handoff,
         ])
         .run(tauri::generate_context!())
         .expect("error while running kazane");

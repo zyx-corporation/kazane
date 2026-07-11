@@ -35,6 +35,7 @@ import datetime
 import json
 import os
 import sqlite3
+import socket
 import uuid
 
 from mcp.server import Server
@@ -67,6 +68,20 @@ def _db() -> sqlite3.Connection:
 
 def _now() -> str:
     return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _notify_agentd(event: dict) -> None:
+    socket_path = os.path.join(BASE_DIR, "kazane-agentd.sock")
+    if not os.path.exists(socket_path):
+        return
+    message = json.dumps({"type": "notify", "event": event}, ensure_ascii=False).encode() + b"\n"
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(1)
+            client.connect(socket_path)
+            client.sendall(message)
+    except OSError:
+        pass
 
 
 def _next_wi_id(con: sqlite3.Connection) -> str:
@@ -153,7 +168,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="submit_handoff",
-            description="Work Item の Handoff Note を提出する。Kazane アプリが 10 秒以内に取込む。",
+            description="Work Item の Handoff Note をSQLiteへ永続化し、状態遷移と次エージェントへのルーティングを行う。",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -378,13 +393,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         agent_id = arguments.get("agent_id", "")
 
         con = _db()
-        row = con.execute("SELECT title, domain, assignee, context_id FROM work_items WHERE id=?", (wi_id,)).fetchone()
-        con.close()
+        row = con.execute(
+            "SELECT title, domain, assignee, context_id, ho_json FROM work_items WHERE id=?",
+            (wi_id,),
+        ).fetchone()
         if not row:
+            con.close()
             return [TextContent(type="text", text=json.dumps({"error": f"Not found: {wi_id}"}))]
 
         ts = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        ho_id = f"HO-{ts[-5:]}"
+        ho_id = f"HO-{ts}-{uuid.uuid4().hex[:6]}"
 
         ho = {
             "id": ho_id,
@@ -407,10 +425,72 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if next_agent:
             ho["nextAgent"] = next_agent
 
-        os.makedirs(HANDOFFS_DIR, exist_ok=True)
-        path = os.path.join(HANDOFFS_DIR, f"{wi_id}.json")
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(ho, f, ensure_ascii=False, indent=2)
+        target_col = "gate" if escalate else ("ai" if next_agent else "done")
+        status = COL_STATUS[target_col]
+        next_value = (
+            "人間が状況を確認し、次アクションを判断する。" if escalate
+            else f"{next_agent} が引き継ぎ" if next_agent
+            else "完了・記録済"
+        )
+        embedded_ho = json.loads(row["ho_json"] or "{}")
+        embedded_ho.update({
+            "did": ho["did"], "judged": ho["judged"], "couldnt": ho["couldnt"],
+            "uncertain": ho["uncertain"], "bounce": ho["bounce"], "next": ho["next"],
+        })
+
+        try:
+            con.execute("BEGIN")
+            con.execute(
+                """INSERT INTO handoff_notes
+                   (id,wi,assignee,domain,did,judged,couldnt,uncertain,bounce,next,
+                    upd_ctx,ev_json,gate,ask,escalated,escalation_reason,created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    ho_id, ho["wi"], ho["assignee"], ho["domain"], ho["did"],
+                    ho["judged"], ho["couldnt"], ho["uncertain"], ho["bounce"],
+                    ho["next"], ho["updCtx"], json.dumps(ho["ev"], ensure_ascii=False),
+                    ho["gate"], ho["ask"], 1 if escalate else 0,
+                    ho["escalationReason"], _now(),
+                ),
+            )
+            con.execute(
+                """UPDATE work_items SET col=?,status=?,assignee=?,next_action=?,ho_json=?,
+                   agent_escalated=?,escalation_reason=?,bounced=?,updated_at=? WHERE id=?""",
+                (
+                    target_col, status, next_agent or row["assignee"], next_value,
+                    json.dumps(embedded_ho, ensure_ascii=False), 1 if escalate else 0,
+                    escalation_reason if escalate else "", 1 if escalate else 0,
+                    _now(), wi_id,
+                ),
+            )
+            con.execute(
+                """INSERT INTO events
+                   (id,wi_id,event_type,from_col,to_col,actor,note,created_at)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    f"EV-{uuid.uuid4().hex}", wi_id,
+                    "agent_escalated" if escalate else "agent_handoff", "ai", target_col,
+                    agent_id or row["assignee"], did[:200], _now(),
+                ),
+            )
+            con.commit()
+        except Exception:
+            con.rollback()
+            con.close()
+            raise
+        con.close()
+
+        if next_agent:
+            os.makedirs(TASKS_DIR, exist_ok=True)
+            task = {
+                "id": wi_id, "title": row["title"], "domain": row["domain"],
+                "assignee": next_agent, "contextId": row["context_id"],
+                "nextAction": next_value, "risk": "中",
+                "routedFrom": agent_id or row["assignee"],
+            }
+            with open(os.path.join(TASKS_DIR, f"{wi_id}.json"), "w", encoding="utf-8") as f:
+                json.dump(task, f, ensure_ascii=False, indent=2)
+            _notify_agentd({"type": "task_assigned", "id": wi_id, "payload": task})
 
         # Remove lock if present
         lock_path = os.path.join(TASKS_DIR, f"{wi_id}.lock")
@@ -420,7 +500,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps({
             "submitted": ho_id, "wi": wi_id,
             "next_agent": next_agent or None,
-            "message": "Kazane が 10 秒以内に取込みます。",
+            "col": target_col,
+            "message": "Handoff・Work Item・Eventを保存しました。",
         }, ensure_ascii=False))]
 
     # ── add_evidence ──────────────────────────────────────────────
