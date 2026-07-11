@@ -94,6 +94,7 @@ fi
 TASKS_DIR="$BASE_DIR/tasks"
 HANDOFFS_DIR="$BASE_DIR/handoffs"
 DB_PATH="$BASE_DIR/kazane.db"
+AGENTD_SOCKET="$BASE_DIR/kazane-agentd.sock"
 
 mkdir -p "$HANDOFFS_DIR"
 
@@ -199,8 +200,8 @@ _submit_handoff() {
   context_id=$(_json_field "$task_file" "contextId")
 
   local ts ho_id
-  ts=$(date +%s)
-  ho_id="HO-$(echo "$ts" | tail -c 5 | sed 's/^0*//')"
+  ts=$(date -u +%Y%m%d%H%M%S)
+  ho_id="HO-$ts-$$"
 
   python3 - "$HANDOFFS_DIR/$wi_id.json" <<PYEOF
 import json, sys, os
@@ -432,13 +433,43 @@ PYEOF
 
   watch)
     watch_timeout=300
+    watch_poll=false
     shift
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --timeout) watch_timeout="$2"; shift 2 ;;
+        --poll) watch_poll=true; shift ;;
         *) shift ;;
       esac
     done
+
+    if [ "$watch_poll" = false ] && [ -S "$AGENTD_SOCKET" ]; then
+      python3 - "$AGENTD_SOCKET" "$watch_timeout" <<'PYEOF'
+import json, socket, sys
+socket_path, timeout = sys.argv[1], float(sys.argv[2])
+client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+client.settimeout(timeout)
+try:
+    client.connect(socket_path)
+    client.sendall(b'{"type":"subscribe"}\n')
+    stream = client.makefile("r", encoding="utf-8")
+    ready = json.loads(stream.readline())
+    if ready.get("type") != "ready":
+        raise RuntimeError("agentd subscription failed")
+    event = json.loads(stream.readline())
+    if event.get("type") == "task_assigned":
+        print(f"New task: {event.get('id', '')}")
+        raise SystemExit(0)
+    raise RuntimeError(f"unexpected event: {event}")
+except TimeoutError:
+    print("Timeout: no new tasks arrived.", file=sys.stderr)
+    raise SystemExit(1)
+finally:
+    client.close()
+PYEOF
+      exit $?
+    fi
+
     echo "Watching for new tasks... (timeout: ${watch_timeout}s)" >&2
     deadline=$(( $(date +%s) + watch_timeout ))
     seen=()
@@ -671,7 +702,7 @@ db_path, tool, result, wi_id, note = sys.argv[1:6]
 trust = "高" if result == "pass" else "低"
 outcome = "✓ pass" if result == "pass" else "✗ fail"
 label = f"{tool}: {outcome}"
-ev_id = "EV-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+ev_id = "EV-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:6]
 now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
 # Try to get current git SHA for store reference
@@ -903,6 +934,7 @@ PYEOF
     python3 - "$DB_PATH" "$issues_json" "$gh_repo" "$gh_project" "$gh_assignee" <<'PYEOF'
 import datetime
 import json
+import re
 import sqlite3
 import sys
 
@@ -921,12 +953,37 @@ def risk_for(labels):
         return "中"
     return "低"
 
+def repo_key(value):
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+def migrate_legacy_id(con, canonical_id, source_url):
+    """Move an old WI-GH-<number> row and its references to the namespaced ID."""
+    legacy = con.execute(
+        "SELECT id FROM work_items WHERE source='github' AND source_ref=? AND id<>?",
+        (source_url, canonical_id),
+    ).fetchone()
+    if not legacy:
+        return
+
+    legacy_id = legacy[0]
+    canonical_exists = con.execute(
+        "SELECT 1 FROM work_items WHERE id=?", (canonical_id,)
+    ).fetchone()
+    if canonical_exists:
+        con.execute("DELETE FROM work_items WHERE id=?", (legacy_id,))
+    else:
+        con.execute("UPDATE work_items SET id=? WHERE id=?", (canonical_id, legacy_id))
+    con.execute("UPDATE handoff_notes SET wi=? WHERE wi=?", (canonical_id, legacy_id))
+    con.execute("UPDATE evidence_log SET wi_id=? WHERE wi_id=?", (canonical_id, legacy_id))
+    con.execute("UPDATE events SET wi_id=? WHERE wi_id=?", (canonical_id, legacy_id))
+
 con = sqlite3.connect(db_path)
 created = updated = open_count = closed_count = 0
 try:
     for issue in issues:
         number = int(issue["number"])
-        wi_id = f"WI-GH-{number}"
+        wi_id = f"WI-GH-{repo_key(repo)}-{number}"
+        migrate_legacy_id(con, wi_id, issue["url"])
         is_closed = issue["state"] == "CLOSED"
         col = "done" if is_closed else "inbox"
         status = "Done / Logged" if is_closed else "Inbox"
@@ -996,7 +1053,7 @@ try:
             ),
         )
 
-        event_id = f"EV-GH-{number}-{issue['state']}"
+        event_id = f"EV-GH-{repo_key(repo)}-{number}-{issue['state']}"
         con.execute(
             """INSERT OR REPLACE INTO events
                (id,wi_id,event_type,from_col,to_col,actor,note,created_at)

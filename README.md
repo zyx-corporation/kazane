@@ -74,16 +74,19 @@ See [docs/design-principles.md](docs/design-principles.md).
 
 ## Current status
 
-Kazane is at conceptual/prototype stage.
+Kazane is at `v0.8 hibiki / 響き` development stage. The local macOS app has
+SQLite-backed Work Items, Context Cards, Handoff Notes, Evidence and RDE views,
+GitHub Issue synchronization, an agent CLI, an MCP server, agent routing,
+concurrency locks, and a local push notification broker.
 
-The intended release path starts with:
-
-- `v0.0 kiri / 霧`: Tauri-based concept and six-screen prototype
-- `v0.1 shirushi / 記し`: internal MVP for recording work origins and context
-- `v0.2 nagare / 流れ`: AI agents pick up assigned business work and return handoffs
-- `v0.3 tsuzuri / 綴り`: work, conversations, decisions, and outputs are woven into traceable history
+The remaining v0.8 work is Phase A control/privilege process separation and the
+external-beta workflow: partner onboarding, feedback capture, and Chronicle
+Replay validation.
 
 See [docs/roadmap.md](docs/roadmap.md).
+
+For local build and installation, see
+[docs/local-deployment.md](docs/local-deployment.md).
 
 ## Repository and branch policy
 

@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""Kazane local agent notification broker.
+
+Phase A IPC uses a local Unix domain socket. Task payloads remain in the durable
+file queue; this process only delivers low-latency assignment notifications.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+BUNDLE_ID = "jp.zyxcorp.kazane"
+BASE_DIR = (
+    Path.home() / "Library" / "Application Support" / BUNDLE_ID
+    if sys.platform == "darwin"
+    else Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / BUNDLE_ID
+)
+SOCKET_PATH = BASE_DIR / "kazane-agentd.sock"
+PID_PATH = BASE_DIR / "kazane-agentd.pid"
+LOG_PATH = BASE_DIR / "kazane-agentd.log"
+
+
+class Broker:
+    def __init__(self) -> None:
+        self.subscribers: set[asyncio.StreamWriter] = set()
+
+    async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        try:
+            raw = await reader.readline()
+            message = json.loads(raw.decode("utf-8"))
+            message_type = message.get("type")
+            if message_type == "subscribe":
+                self.subscribers.add(writer)
+                writer.write(b'{"type":"ready"}\n')
+                await writer.drain()
+                await reader.read()
+                return
+            if message_type == "notify":
+                event = json.dumps(message.get("event", {}), ensure_ascii=False).encode("utf-8") + b"\n"
+                stale: list[asyncio.StreamWriter] = []
+                for subscriber in self.subscribers:
+                    try:
+                        subscriber.write(event)
+                        await subscriber.drain()
+                    except (BrokenPipeError, ConnectionError):
+                        stale.append(subscriber)
+                for subscriber in stale:
+                    self.subscribers.discard(subscriber)
+                writer.write(json.dumps({"ok": True, "delivered": len(self.subscribers)}).encode() + b"\n")
+                await writer.drain()
+                return
+            writer.write(b'{"ok":false,"error":"unknown message type"}\n')
+            await writer.drain()
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            writer.write(json.dumps({"ok": False, "error": str(error)}).encode() + b"\n")
+            await writer.drain()
+        finally:
+            self.subscribers.discard(writer)
+            writer.close()
+            await writer.wait_closed()
+
+
+async def serve() -> None:
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    if SOCKET_PATH.exists():
+        SOCKET_PATH.unlink()
+    PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
+    broker = Broker()
+    server = await asyncio.start_unix_server(broker.handle, path=SOCKET_PATH)
+    os.chmod(SOCKET_PATH, 0o600)
+    try:
+        async with server:
+            await server.serve_forever()
+    finally:
+        SOCKET_PATH.unlink(missing_ok=True)
+        PID_PATH.unlink(missing_ok=True)
+
+
+def running_pid() -> int | None:
+    try:
+        pid = int(PID_PATH.read_text(encoding="utf-8"))
+        os.kill(pid, 0)
+        return pid
+    except (FileNotFoundError, ValueError, ProcessLookupError, PermissionError):
+        return None
+
+
+def main() -> int:
+    command = sys.argv[1] if len(sys.argv) > 1 else "serve"
+    if command == "serve":
+        asyncio.run(serve())
+        return 0
+    if command == "start":
+        pid = running_pid()
+        if pid:
+            print(f"kazane-agentd already running (pid={pid})")
+            return 0
+        BASE_DIR.mkdir(parents=True, exist_ok=True)
+        with LOG_PATH.open("ab") as log:
+            process = subprocess.Popen(
+                [sys.executable, str(Path(__file__).resolve()), "serve"],
+                stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True,
+            )
+        print(f"kazane-agentd started (pid={process.pid})")
+        return 0
+    if command == "stop":
+        pid = running_pid()
+        if not pid:
+            print("kazane-agentd is not running")
+            return 0
+        os.kill(pid, signal.SIGTERM)
+        print(f"kazane-agentd stopped (pid={pid})")
+        return 0
+    if command == "status":
+        pid = running_pid()
+        print(f"running (pid={pid})" if pid else "stopped")
+        return 0 if pid else 1
+    print("Usage: kazane-agentd [serve|start|stop|status]", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

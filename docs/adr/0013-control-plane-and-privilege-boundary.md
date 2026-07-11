@@ -1,6 +1,6 @@
 # ADR 0013: Control plane and privilege boundary
 
-- Status: Proposed
+- Status: Accepted (Phase A in progress)
 - Date: 2026-06-26
 
 ## Context
@@ -35,3 +35,23 @@ The initial implementation may mock some boundaries, but the architecture must p
 - Unresolved: IPC mechanism, policy engine, command profiles, and process supervision.
 - Deviation risk: mock boundaries may become permanent if not tested.
 - Next update: define Phase A IPC and privileged operation schema.
+
+## Phase A IPC decision (2026-07-11)
+
+Phase A uses local Unix domain sockets for process notifications and typed JSON
+messages. Durable state remains in SQLite and the task file queue; socket
+delivery is an acceleration path and must never be the only copy of a task.
+
+The first separated runtime is `kazane-agentd`:
+
+- `scripts/kazane-agentd` runs independently from the Tauri application;
+- the socket is stored at `{AppData}/kazane-agentd.sock` with mode `0600`;
+- Tauri and `kazane-mcp` publish `task_assigned` notifications;
+- `kazane-agent watch` subscribes to push notifications and falls back to file
+  polling when the daemon is unavailable;
+- unknown message types are rejected by default.
+
+This establishes the execution-plane boundary and IPC mechanism. Phase A is
+not complete until state-changing MCP operations are delegated to a separate
+`kazaned` control-plane process and privileged operations have typed profiles
+owned by `kazane-privd`.

@@ -339,52 +339,52 @@ export default function App() {
     flash(t.toastAgentAssigned.replace('{id}', id));
   }
 
-  const importAgentHandoff = useCallback((ho: HandoffNote) => {
-    setHandoffs(prev => [ho, ...prev]);
-    setHoSel(ho.id);
-    if (IS_TAURI && dbReady) dbUpsertHandoff(ho).catch(() => {});
+  const importAgentHandoff = useCallback(async (ho: HandoffNote) => {
     const wiId = ho.wi.split(' ')[0];
     const escalated = ho.escalated ?? false;
     const nextAgent = ho.nextAgent ?? '';
-    // nextAgent → route to next agent (stay in 'ai'), escalated → 'gate', else 'done'
     const targetCol: BoardCol = escalated ? 'gate' : nextAgent ? 'ai' : 'done';
-    setItems(prev => {
-      let changed: WorkItem | undefined;
-      const updated = prev.map(i => {
-        if (i.id !== wiId) return i;
-        changed = {
-          ...i, col: targetCol, status: COL_NAMES[targetCol],
-          agentEscalated: escalated,
-          escalationReason: ho.escalationReason ?? '',
-          bounced: escalated ? true : i.bounced,
-          assignee: nextAgent || i.assignee,
-          ho: { ...i.ho, did: ho.did, judged: ho.judged, couldnt: ho.couldnt, uncertain: ho.uncertain, bounce: ho.bounce, next: ho.next },
-          nextAction: targetCol === 'done' ? '完了・記録済' : nextAgent ? `${nextAgent} が引き継ぎ` : i.nextAction,
-        };
-        return changed;
+
+    const latest = await dbListItems();
+    const current = latest.find(i => i.id === wiId);
+    if (!current) throw new Error(`Work Item not found: ${wiId}`);
+    const changed: WorkItem = {
+      ...current, col: targetCol, status: COL_NAMES[targetCol],
+      agentEscalated: escalated,
+      escalationReason: ho.escalationReason ?? '',
+      bounced: escalated ? true : current.bounced,
+      assignee: nextAgent || current.assignee,
+      ho: { ...current.ho, did: ho.did, judged: ho.judged, couldnt: ho.couldnt, uncertain: ho.uncertain, bounce: ho.bounce, next: ho.next },
+      nextAction: targetCol === 'done' ? '完了・記録済' : nextAgent ? `${nextAgent} が引き継ぎ` : current.nextAction,
+    };
+
+    if (IS_TAURI) {
+      await dbUpsertHandoff(ho);
+      await dbUpsertItem(changed);
+      await dbAddEvent({
+        id: makeEventId(), wiId,
+        eventType: escalated ? 'agent_escalated' : 'agent_handoff',
+        toCol: targetCol, actor: ho.assignee, note: ho.did.slice(0, 80),
+        createdAt: new Date().toISOString(),
       });
-      persistLocal(updated);
-      if (IS_TAURI && dbReady && changed) {
-        dbUpsertItem(changed).catch(() => {});
-        // Write new task file for next agent
-        if (nextAgent && changed) {
-          const task = {
-            id: wiId, title: changed.title, domain: changed.domain,
-            assignee: nextAgent, contextId: changed.contextId,
-            nextAction: changed.nextAction, risk: changed.risk,
-            routedFrom: ho.agentId ?? ho.assignee,
-          };
-          invoke('write_agent_task', { id: wiId, payload: JSON.stringify(task, null, 2) }).catch(() => {});
-        }
+      if (nextAgent) {
+        const task = {
+          id: wiId, title: changed.title, domain: changed.domain,
+          assignee: nextAgent, contextId: changed.contextId,
+          nextAction: changed.nextAction, risk: changed.risk,
+          routedFrom: ho.agentId ?? ho.assignee,
+        };
+        await invoke('write_agent_task', { id: wiId, payload: JSON.stringify(task, null, 2) });
       }
-      return updated;
-    });
-    const evType = escalated ? 'agent_escalated' : nextAgent ? 'agent_handoff' : 'agent_handoff';
-    logEv(wiId, evType as EventType, { toCol: targetCol, actor: ho.assignee, note: ho.did.slice(0, 80) });
+    }
+
+    setItems(latest.map(i => i.id === wiId ? changed : i));
+    setHandoffs(prev => [ho, ...prev.filter(existing => existing.id !== ho.id)]);
+    setHoSel(ho.id);
     if (escalated) flash(t.toastAgentEscalated.replace('{id}', wiId));
     else if (nextAgent) flash(`${wiId} → ${nextAgent} へルーティング`);
     else flash(t.toastAgentHandoffReceived.replace('{id}', wiId));
-  }, [dbReady, logEv, t]);
+  }, [t]);
 
   // Poll for agent handoffs every 10s (Tauri only)
   useEffect(() => {
@@ -394,9 +394,12 @@ export default function App() {
         const ids = await invoke<string[]>('poll_agent_handoffs');
         for (const wiId of ids) {
           const json = await invoke<string>('read_agent_handoff', { id: wiId });
-          importAgentHandoff(JSON.parse(json) as HandoffNote);
+          await importAgentHandoff(JSON.parse(json) as HandoffNote);
+          await invoke('acknowledge_agent_handoff', { id: wiId });
         }
-      } catch (_) {}
+      } catch (error) {
+        console.error('Agent handoff import failed', error);
+      }
     }, 10_000);
     return () => clearInterval(interval);
   }, [importAgentHandoff]);
