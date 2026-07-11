@@ -254,8 +254,9 @@ Exit criteria:
 Current state (2026-07-11): MCP, routing, locking, local push notifications,
 and Phase A process separation have passed local E2E verification. MCP writes
 are routed through `kazaned`; `kazane-privd` applies default-deny authorization
-and records every decision. Partner onboarding, feedback capture, and Chronicle
-Replay remain after the infrastructure track.
+and records every decision. The optional blank-state Start Guide now creates a
+diagnostic Context Card and first linked Work Item. Partner trial validation,
+feedback capture, simplified trust copy, and Chronicle Replay remain.
 
 ## v0.9 utsuwa / 器
 

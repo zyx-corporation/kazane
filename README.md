@@ -87,6 +87,7 @@ See [docs/roadmap.md](docs/roadmap.md).
 
 For local build and installation, see
 [docs/local-deployment.md](docs/local-deployment.md).
+For a blank-state first workflow, see [docs/start-guide.md](docs/start-guide.md).
 
 ## Repository and branch policy
 

@@ -21,9 +21,10 @@ interface SidebarProps {
   lang: Lang;
   t: Translations;
   onNav: (s: Screen) => void;
+  onOnboarding: () => void;
 }
 
-export function Sidebar({ current, t, onNav }: SidebarProps) {
+export function Sidebar({ current, t, onNav, onOnboarding }: SidebarProps) {
   return (
     <aside style={s.sidebar}>
       <div style={s.brand}>
@@ -60,8 +61,8 @@ export function Sidebar({ current, t, onNav }: SidebarProps) {
 
       <div style={s.divider} />
       <nav style={s.nav}>
-        {['Settings', 'Integrations'].map(label => (
-          <button key={label} style={{ ...s.navBtn, color: '#7e8590', fontSize: 12 }}>
+        {['Start Guide', 'Integrations'].map(label => (
+          <button key={label} onClick={label === 'Start Guide' ? onOnboarding : undefined} style={{ ...s.navBtn, color: label === 'Start Guide' ? '#79bca4' : '#7e8590', fontSize: 12 }}>
             <span style={{ ...s.navBar, background: 'transparent' }} />
             <span style={{ width: 7, height: 7, borderRadius: 2, background: '#3a3f4a', flexShrink: 0 }} />
             {label}

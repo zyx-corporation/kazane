@@ -1014,11 +1014,11 @@ WORK_ITEMS = [
     ),
     wi_row(
         "WI-808", "v0.8: パートナー向けオンボーディング・診断テンプレート",
-        "開発", "Claude Code", "inbox", "中", "CTX-001",
-        "小規模事業者が初回起動から業務WI作成まで進めるテンプレートを設計する", "外部公開はTomoyukiが判断",
+        "開発", "Claude Code", "done", "中", "CTX-001",
+        "完了・記録済", "外部公開はTomoyukiが判断",
         False, False, False, "調査・設計・プロトタイプ", "外部公開／顧客データ投入",
         ctx={"question": "非エンジニアの試用者がKazaneの責任境界を理解して開始できるか。", "purpose": "外部ベータの初回体験を成立させる。", "constraint": "実在顧客データを初期値に含めない。", "unresolved": "試用者と対象業務の選定。"},
-        ho={"did": "未着手。", "uncertain": "試用者フィードバックが必要。", "bounce": "—", "next": "オンボーディング手順と診断テンプレートを作成する。"},
+        ho={"did": "Sidebarから任意起動する3段階Start Guideを実装。組織・案件、業務領域・停滞、AI停止条件からContext Cardと最初のWork Itemを生成。ja/en/zh対応、browser E2E確認済み。", "uncertain": "実試用者フィードバックはWI-809で取得する。", "bounce": "—", "next": "完了・記録済。"},
         ev=[], created_at="2026-07-11T09:20:00",
     ),
     wi_row(
