@@ -239,6 +239,24 @@ fn migrations() -> Vec<Migration> {
             sql: "ALTER TABLE work_items ADD COLUMN project TEXT NOT NULL DEFAULT '';",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "create_privileged_operation_requests",
+            sql: "
+                CREATE TABLE IF NOT EXISTS privileged_operation_requests (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    agent_id TEXT NOT NULL DEFAULT '',
+                    operation TEXT NOT NULL DEFAULT '',
+                    args_json TEXT NOT NULL DEFAULT '{}',
+                    decision TEXT NOT NULL DEFAULT 'deny',
+                    reason TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_privileged_operation_created
+                    ON privileged_operation_requests(created_at);
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

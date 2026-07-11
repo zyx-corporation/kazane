@@ -41,6 +41,7 @@ import uuid
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
+from kazane_control import ensure_daemon, rpc
 
 BUNDLE_ID = "jp.zyxcorp.kazane"
 if os.uname().sysname == "Darwin":
@@ -58,6 +59,10 @@ COL_STATUS = {
 }
 
 server = Server("kazane")
+CONTROLLED_WRITES = {
+    "create_work_item", "update_work_item", "submit_handoff", "add_evidence",
+    "mail_import", "calendar_import",
+}
 
 
 def _db() -> sqlite3.Connection:
@@ -144,9 +149,10 @@ async def list_tools() -> list[Tool]:
                     "next_action": {"type": "string"},
                     "source": {"type": "string", "enum": ["manual", "gmail", "calendar"], "default": "manual"},
                     "source_ref": {"type": "string", "default": ""},
+                    "project": {"type": "string", "default": ""},
                     "agent_id": {"type": "string", "description": "操作するエージェントのID (AGT-01 等)"},
                 },
-                "required": ["title"],
+                "required": ["title", "agent_id"],
             },
         ),
         Tool(
@@ -163,7 +169,7 @@ async def list_tools() -> list[Tool]:
                     "next_action": {"type": "string"},
                     "agent_id": {"type": "string"},
                 },
-                "required": ["id"],
+                "required": ["id", "agent_id"],
             },
         ),
         Tool(
@@ -181,7 +187,7 @@ async def list_tools() -> list[Tool]:
                     "next_agent": {"type": "string", "description": "次に処理するエージェントID (ルーティング用)"},
                     "agent_id": {"type": "string"},
                 },
-                "required": ["wi_id", "did", "next"],
+                "required": ["wi_id", "did", "next", "agent_id"],
             },
         ),
         Tool(
@@ -197,7 +203,7 @@ async def list_tools() -> list[Tool]:
                     "store": {"type": "string", "description": "保存場所 (例: local:git:abc1234)"},
                     "note": {"type": "string", "default": ""},
                 },
-                "required": ["wi_id", "type", "label"],
+                "required": ["wi_id", "type", "label", "agent_id"],
             },
         ),
         Tool(
@@ -226,7 +232,7 @@ async def list_tools() -> list[Tool]:
                     "risk": {"type": "string", "enum": ["低", "中", "高"], "default": "中"},
                     "agent_id": {"type": "string"},
                 },
-                "required": ["from_addr", "subject"],
+                "required": ["from_addr", "subject", "agent_id"],
             },
         ),
         Tool(
@@ -244,7 +250,7 @@ async def list_tools() -> list[Tool]:
                     "wi_id": {"type": "string", "description": "指定時は既存 WI に Evidence を追記"},
                     "agent_id": {"type": "string"},
                 },
-                "required": ["title"],
+                "required": ["title", "agent_id"],
             },
         ),
     ]
@@ -252,6 +258,18 @@ async def list_tools() -> list[Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    if name in CONTROLLED_WRITES:
+        try:
+            ensure_daemon("kazane-privd")
+            ensure_daemon("kazaned")
+            result = rpc("kazaned", name, arguments, timeout=30)
+        except Exception as error:
+            result = {"error": f"control-plane unavailable: {error}"}
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+    return await _legacy_read_tool(name, arguments)
+
+
+async def _legacy_read_tool(name: str, arguments: dict) -> list[TextContent]:
     now = _now()
 
     # ── list_work_items ───────────────────────────────────────────

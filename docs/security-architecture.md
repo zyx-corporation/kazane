@@ -137,6 +137,19 @@ Responsibilities:
 - write audit events;
 - deny or escalate unsafe requests.
 
+### Phase A implementation
+
+The local Phase A boundary is implemented as three Unix-socket processes:
+
+- `kazaned` owns all MCP state-changing operations;
+- `kazane-privd` authorizes typed requests against Agent Profile Gate stops;
+- `kazane-agentd` delivers task assignment notifications.
+
+The MCP server requires an `agent_id` for every write. Missing identities,
+unknown agents, unknown operations, and Gate-stop matches are denied by default.
+Every decision is stored in `privileged_operation_requests`. Phase A does not
+yet retrieve secrets or execute arbitrary commands; those remain prohibited.
+
 ## Privileged operation model
 
 Agents should request typed operations rather than arbitrary shell access.

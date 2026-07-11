@@ -1,6 +1,6 @@
 # ADR 0013: Control plane and privilege boundary
 
-- Status: Accepted (Phase A in progress)
+- Status: Accepted (Phase A implemented)
 - Date: 2026-06-26
 
 ## Context
@@ -51,7 +51,13 @@ The first separated runtime is `kazane-agentd`:
   polling when the daemon is unavailable;
 - unknown message types are rejected by default.
 
-This establishes the execution-plane boundary and IPC mechanism. Phase A is
-not complete until state-changing MCP operations are delegated to a separate
-`kazaned` control-plane process and privileged operations have typed profiles
-owned by `kazane-privd`.
+State-changing MCP operations are delegated to the separate `kazaned` process.
+Before execution, `kazaned` asks `kazane-privd` to authorize the typed request
+against the acting Agent Profile. Missing identities, unknown agents, unknown
+operations, and requests matching an agent's Gate stops are denied by default.
+Every allow/deny decision is written to `privileged_operation_requests`.
+
+Phase A does not give `kazane-privd` access to secrets or arbitrary commands.
+Future privileged operation profiles may add narrowly typed execution, but
+secret retrieval, connector credentials, production actions, and arbitrary
+shell execution remain outside the implemented boundary.

@@ -79,8 +79,9 @@ SQLite永続化、Work Item・Context Card・Handoff・Evidence・RDE、GitHub
 Issue同期、Agent CLI、MCP Server、エージェント間ルーティング、同時処理
 ロック、ローカルPush通知ブローカーが実装されています。
 
-v0.8の残務は、Phase Aのコントロール／権限プロセス分離と、パートナー向け
-オンボーディング・フィードバック記録・Chronicle Replay検証です。
+Phase Aの`kazaned`・`kazane-privd`・`kazane-agentd`分離は実装済みです。
+v0.8の残務は、パートナー向けオンボーディング・フィードバック記録・
+Chronicle Replay検証です。
 
 詳細は [docs/roadmap.md](docs/roadmap.md) を参照してください。
 
