@@ -11,11 +11,12 @@ interface ContextCardsProps {
   onGoBoard: () => void;
   onGoRde: () => void;
   onAddCtx: () => void;
+  onAddFeedback: () => void;
 }
 
-export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnresolved, onGoBoard, onGoRde, onAddCtx }: ContextCardsProps) {
+export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnresolved, onGoBoard, onGoRde, onAddCtx, onAddFeedback }: ContextCardsProps) {
   const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'general' | 'customer'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'general' | 'customer' | 'feedback'>('all');
 
   const filtered = contexts.filter(c => {
     const matchQuery = !query.trim() ||
@@ -29,11 +30,20 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
 
   const sel = contexts.find(c => c.id === ctxSel) ?? contexts[0];
   const isCustomer = sel?.cardType === 'customer';
+  const isFeedback = sel?.cardType === 'feedback';
 
   return (
     <section style={s.page}>
-      <h1 style={s.h1}>Context Cards</h1>
-      <p style={s.sub}>{t.subCtx}</p>
+      <div style={s.pageHeader}>
+        <div>
+          <h1 style={s.h1}>Context Cards</h1>
+          <p style={s.sub}>{t.subCtx}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onAddFeedback} style={s.feedbackBtn}>{t.btnAddFeedback}</button>
+          <button onClick={onAddCtx} style={s.primaryBtn}>{t.btnCreateCtx}</button>
+        </div>
+      </div>
 
       <div style={s.layout}>
         {/* Left list */}
@@ -45,20 +55,21 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
             style={{ background: '#14161b', border: '1px solid #2d323d', borderRadius: 7, color: '#e6e8ec', fontSize: 11.5, padding: '6px 10px', fontFamily: 'inherit', outline: 'none', marginBottom: 4 }}
           />
           <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
-            {(['all', 'general', 'customer'] as const).map(f => (
+            {(['all', 'general', 'customer', 'feedback'] as const).map(f => (
               <button key={f} onClick={() => setTypeFilter(f)} style={{
                 padding: '3px 10px', borderRadius: 6, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit',
                 background: typeFilter === f ? '#1f2330' : '#14161b',
                 border: `1px solid ${typeFilter === f ? '#3a4656' : '#262a33'}`,
                 color: typeFilter === f ? '#9cc0f5' : '#6a7078',
               }}>
-                {f === 'all' ? '全て' : f === 'general' ? '汎用' : '顧客'}
+                {f === 'all' ? '全て' : f === 'general' ? '汎用' : f === 'customer' ? '顧客' : 'Feedback'}
               </button>
             ))}
           </div>
           {filtered.map(c => {
             const active = c.id === ctxSel;
             const isCust = c.cardType === 'customer';
+            const isFeedback = c.cardType === 'feedback';
             return (
               <button key={c.id} onClick={() => onSelectCtx(c.id)} style={{
                 ...s.listItem,
@@ -68,6 +79,7 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={s.mono}>{c.id}</span>
                   {isCust && <span style={s.custBadge}>顧客</span>}
+                  {isFeedback && <span style={s.feedbackBadge}>Feedback</span>}
                 </div>
                 <span style={s.listTitle}>{c.title}</span>
                 {isCust && c.customerCompany && (
@@ -88,6 +100,7 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                   <span style={s.mono}>{sel.id}</span>
                   {isCustomer && <span style={s.custBadgeLg}>顧客 Context</span>}
+                  {isFeedback && <span style={s.feedbackBadge}>Feedback Context</span>}
                 </div>
                 <h2 style={s.detailTitle}>{sel.title}</h2>
                 {isCustomer && sel.customerCompany && (
@@ -156,7 +169,6 @@ export function ContextCards({ contexts, ctxSel, t, onSelectCtx, onPromoteUnreso
               <div style={s.nextPolicy}><span style={{ color: '#6a7078' }}>{t.nextPolicy}</span> {sel.nextPolicy}</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={onGoBoard} style={s.secondaryBtn}>{t.btnConnectWI}</button>
-                <button onClick={onAddCtx} style={s.primaryBtn}>{t.btnCreateCtx}</button>
               </div>
             </div>
           </div>
@@ -190,6 +202,7 @@ function InfoRow({ label, value, isEmail }: { label: string; value: string; isEm
 
 const s: Record<string, React.CSSProperties> = {
   page: { padding: '26px 28px 40px' },
+  pageHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 },
   h1: { margin: 0, fontSize: 22, fontWeight: 700, color: '#e6e8ec' },
   sub: { margin: '6px 0 0', color: '#8b919c', fontSize: 13 },
   layout: { marginTop: 18, display: 'grid', gridTemplateColumns: '300px 1fr', gap: 18, alignItems: 'start' },
@@ -201,11 +214,13 @@ const s: Record<string, React.CSSProperties> = {
   unresolvedBadge: { fontSize: 10, color: '#a07fe0' },
   custBadge: { fontSize: 9, color: '#c5a8f0', background: '#221830', border: '1px solid #4a2d6a', padding: '1px 6px', borderRadius: 4 },
   custBadgeLg: { fontSize: 10.5, color: '#c5a8f0', background: '#221830', border: '1px solid #4a2d6a', padding: '2px 8px', borderRadius: 5 },
+  feedbackBadge: { fontSize: 9, color: '#87cddd', background: '#15252a', border: '1px solid #28505a', padding: '1px 6px', borderRadius: 4 },
   custInfoBox: { background: '#1e1826', border: '1px solid #3a2850', borderRadius: 9, padding: '12px 14px' },
   custInfoHd: { fontSize: 10, color: '#c5a8f0', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 9 },
   detail: { border: '1px solid #262a33', background: '#1a1d24', borderRadius: 12, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 },
   detailTitle: { margin: '3px 0 0', fontSize: 18, fontWeight: 700, color: '#e6e8ec' },
   rdeBtn: { border: '1px solid #322c47', background: '#1d1a29', color: '#b6a6ee', padding: '7px 12px', borderRadius: 7, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+  feedbackBtn: { border: '1px solid #28505a', background: '#15252a', color: '#87cddd', padding: '7px 11px', borderRadius: 7, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' },
   fieldGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 22px' },
   relGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
   relBox: { background: '#16191f', border: '1px solid #262a33', borderRadius: 9, padding: 13 },

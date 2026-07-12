@@ -61,6 +61,11 @@ export interface Translations {
   toastCtxUpdated: string;
   agentProfilesHd: string;
   agentTrust: string;
+  btnAddFeedback: string;
+  feedbackAnonymous: string;
+  feedbackConstraint: string;
+  feedbackNextPolicy: string;
+  replayDesc: string;
 }
 
 const T: Record<Lang, Translations> = {
@@ -114,12 +119,17 @@ const T: Record<Lang, Translations> = {
     agentPickedUpLabel: 'エージェント着手',
     agentEscalatedLabel: 'エスカレーション',
     agentQueueEmpty: '割り当て待ちのタスクはありません',
-    tabTimeline: '履歴',
+    tabTimeline: 'Replay',
     timelineEmpty: 'このWork Itemの履歴はまだ記録されていません。',
     btnProposeCtxUpdate: 'を更新（このHOから）',
     toastCtxUpdated: '{ctxId} を Handoff Note から更新しました',
     agentProfilesHd: 'Agent プロファイル',
     agentTrust: '信頼度',
+    btnAddFeedback: 'Feedbackを記録',
+    feedbackAnonymous: '匿名の試用者',
+    feedbackConstraint: '製品改善目的での記録同意を確認。個人情報は必要最小限とし、外部共有しない。',
+    feedbackNextPolicy: '背景を保ったまま、必要な改善だけをWork Itemとして分離する。',
+    replayDesc: '記録済みのContext・Event・Handoff・Evidenceだけを時系列で再生します。非公開推論は含みません。',
   },
   en: {
     tagline1: 'Hear the signals of work,', tagline2: 'chronicle the lineage of decisions.',
@@ -171,12 +181,17 @@ const T: Record<Lang, Translations> = {
     agentPickedUpLabel: 'Agent picked up',
     agentEscalatedLabel: 'Escalated',
     agentQueueEmpty: 'No tasks pending for agent',
-    tabTimeline: 'Timeline',
+    tabTimeline: 'Replay',
     timelineEmpty: 'No history recorded for this Work Item yet.',
     btnProposeCtxUpdate: '→ update from this HO',
     toastCtxUpdated: '{ctxId} updated from Handoff Note',
     agentProfilesHd: 'Agent Profiles',
     agentTrust: 'Trust',
+    btnAddFeedback: 'Capture Feedback',
+    feedbackAnonymous: 'Anonymous trial user',
+    feedbackConstraint: 'Consent to record for product improvement was confirmed. Minimize personal data and do not share it externally.',
+    feedbackNextPolicy: 'Preserve the background and separate only the necessary improvement into a Work Item.',
+    replayDesc: 'Replays only recorded Context, Events, Handoffs, and Evidence in order. Private reasoning is not included.',
   },
   zh: {
     tagline1: '聆听工作的气息，', tagline2: '记录决策的脉络。',
@@ -228,12 +243,17 @@ const T: Record<Lang, Translations> = {
     agentPickedUpLabel: 'Agent 已接手',
     agentEscalatedLabel: '已上报',
     agentQueueEmpty: '没有待处理的 Agent 任务',
-    tabTimeline: '历史',
+    tabTimeline: '回放',
     timelineEmpty: '此 Work Item 暂无历史记录。',
     btnProposeCtxUpdate: '→ 从此 HO 更新',
     toastCtxUpdated: '{ctxId} 已从 Handoff Note 更新',
     agentProfilesHd: 'Agent 档案',
     agentTrust: '可信度',
+    btnAddFeedback: '记录反馈',
+    feedbackAnonymous: '匿名试用者',
+    feedbackConstraint: '已确认同意为产品改进而记录。尽量减少个人信息，且不对外共享。',
+    feedbackNextPolicy: '保留背景，只将必要的改进拆分为 Work Item。',
+    replayDesc: '按顺序回放已记录的 Context、Event、Handoff 和 Evidence，不包含私有推理。',
   },
 };
 

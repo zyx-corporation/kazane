@@ -79,15 +79,21 @@ SQLite-backed Work Items, Context Cards, Handoff Notes, Evidence and RDE views,
 GitHub Issue synchronization, an agent CLI, an MCP server, agent routing,
 concurrency locks, and a local push notification broker.
 
-The remaining v0.8 work is the external-beta workflow: partner onboarding,
-feedback capture, and Chronicle Replay validation. Phase A local process
+The v0.8 external-beta workflow now includes partner onboarding, Feedback Context
+capture, a Trust & Privacy explanation, and Chronicle Replay. Phase A local process
 separation is implemented for `kazaned`, `kazane-privd`, and `kazane-agentd`.
+The remaining exit check requires an actual partner or trial user to validate that
+the workflow and one provenance chain are understandable.
 
 See [docs/roadmap.md](docs/roadmap.md).
 
 For local build and installation, see
 [docs/local-deployment.md](docs/local-deployment.md).
 For a blank-state first workflow, see [docs/start-guide.md](docs/start-guide.md).
+For external feedback and trust boundaries, see
+[docs/feedback-context.md](docs/feedback-context.md) and
+[docs/trust-and-privacy.md](docs/trust-and-privacy.md). Replay behavior is defined in
+[docs/chronicle-replay.md](docs/chronicle-replay.md).
 
 ## Repository and branch policy
 

@@ -289,9 +289,12 @@ kazane-agent update <WI-ID> --agent-id <id>  # gate check付き更新
 | WI-804 | エージェント間ルーティング — nextAgent フィールド | done（Agent A→B E2E済み） |
 | WI-805 | 並列処理制御 — ロック機構 | done（二重ロック拒否確認済み） |
 | WI-808 | パートナー向けオンボーディング・診断テンプレート | done（blank-state browser E2E済み） |
-| WI-809 | 外部フィードバックをContextとして記録 | inbox |
-| WI-810 | 非エンジニア向けラベル・プライバシー説明 | inbox |
-| WI-811 | Chronicle Progress・Replay prototype | inbox |
+| WI-809 | 外部フィードバックをContextとして記録 | done（空状態browser E2E済み） |
+| WI-810 | 非エンジニア向けラベル・プライバシー説明 | done（Trustパネルbrowser E2E済み） |
+| WI-811 | Chronicle Progress・Replay prototype | done（WI由来再生browser E2E済み） |
+
+実装残はなく、v0.8の未達条件は実際の外部試用者による理解確認のみ。試用で得た内容は
+`docs/feedback-context.md` の手順でContextとして記録し、推測で完了扱いにしないこと。
 
 ---
 
@@ -300,3 +303,6 @@ kazane-agent update <WI-ID> --agent-id <id>  # gate check付き更新
 - `docs/roadmap.md` — 全マイルストーン定義
 - `docs/adr/` — ADR 0001〜0015（主要: 0003 Context Card, 0004 Agent Model, 0012 Tauri-first, 0013 権限境界, 0015 開発ロール）
 - `scripts/kazane-import-dev` — 現在の開発状態の完全な記録（Context Cards・WI・Handoff・Evidence・Gate Rules・Agent Profiles）
+- `docs/feedback-context.md` — 外部フィードバック記録フロー
+- `docs/trust-and-privacy.md` — 試用者に示す現在の信頼・責任境界
+- `docs/chronicle-replay.md` — Replay対象と非公開推論を含めない境界

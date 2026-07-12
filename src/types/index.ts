@@ -99,7 +99,7 @@ export interface EnrichedWorkItem extends WorkItem {
   actorColor: string;
 }
 
-export type CardType = 'general' | 'customer';
+export type CardType = 'general' | 'customer' | 'feedback';
 export type WorkItemSource = 'manual' | 'gmail' | 'calendar' | 'github';
 
 export interface ContextCard {

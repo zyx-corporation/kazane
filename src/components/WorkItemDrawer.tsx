@@ -344,13 +344,16 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
           )}
           {tab === 'timeline' && (
             <div style={s.stack}>
-              {events.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#4a5268', textAlign: 'center', padding: '20px 0' }}>
-                  {t.timelineEmpty}
-                </div>
-              ) : (
-                <div style={{ position: 'relative' }}>
-                  <div style={{ position: 'absolute', left: 10, top: 0, bottom: 0, width: 1, background: '#262a33' }} />
+              <div style={{ background: 'linear-gradient(135deg,#17201d,#171922)', border: '1px solid #30413a', borderRadius: 10, padding: 13 }}>
+                <div style={{ fontSize: 9.5, color: '#5fb89f', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '.12em' }}>CHRONICLE REPLAY</div>
+                <div style={{ fontSize: 12, color: '#cbd5cf', marginTop: 5, lineHeight: 1.6 }}>{t.replayDesc}</div>
+              </div>
+              <ReplayEntry color="#9b8cf0" label="ORIGIN / CONTEXT" title={item.ctx.question} body={item.ctx.purpose} meta={item.contextId} />
+              <ReplayEntry color={item.colColor} label="CURRENT STATE" title={item.status} body={item.nextAction} meta={item.assignee} />
+              {events.length > 0 && (
+                <div style={{ position: 'relative', paddingTop: 4 }}>
+                  <div style={{ fontSize: 9.5, color: '#6a7078', fontFamily: "'JetBrains Mono', monospace", marginBottom: 10 }}>RECORDED EVENTS · {events.length}</div>
+                  <div style={{ position: 'absolute', left: 10, top: 28, bottom: 0, width: 1, background: '#262a33' }} />
                   {events.map(ev => {
                     const color = EVENT_COLORS[ev.eventType] ?? '#6a7078';
                     const icon = EVENT_ICONS[ev.eventType] ?? '·';
@@ -375,6 +378,11 @@ export function WorkItemDrawer({ item, tab, t, wiEvidenceLog, onClose, onSetTab,
                     );
                   })}
                 </div>
+              )}
+              {wiEvidenceLog.map(e => <ReplayEntry key={e.id} color={trustColor(e.trust)} label="EVIDENCE" title={e.label} body={e.note || e.store} meta={`${e.type} · trust ${e.trust}`} />)}
+              {item.ho.did && item.ho.did !== '未着手。' && <ReplayEntry color="#3fb6a8" label="HANDOFF" title={item.ho.did} body={item.ho.next} meta={item.ho.uncertain ? `uncertain: ${item.ho.uncertain}` : ''} />}
+              {events.length === 0 && wiEvidenceLog.length === 0 && (!item.ho.did || item.ho.did === '未着手。') && (
+                <div style={{ fontSize: 11, color: '#4a5268', textAlign: 'center', padding: '8px 0' }}>{t.timelineEmpty}</div>
               )}
             </div>
           )}
@@ -511,6 +519,15 @@ function CtxTextarea({ label, value, onChange, rows = 2, labelColor = '#6a7078' 
       />
     </div>
   );
+}
+
+function ReplayEntry({ color, label, title, body, meta }: { color: string; label: string; title: string; body: string; meta?: string }) {
+  return <div style={{ borderLeft: `2px solid ${color}`, background: '#16191f', borderRadius: '0 8px 8px 0', padding: '10px 12px' }}>
+    <div style={{ color, fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '.1em' }}>{label}</div>
+    <div style={{ color: '#dce1e5', fontSize: 12, lineHeight: 1.55, marginTop: 4 }}>{title}</div>
+    {body && <div style={{ color: '#89919b', fontSize: 10.5, lineHeight: 1.55, marginTop: 3 }}>{body}</div>}
+    {meta && <div style={{ color: '#555e69', fontSize: 9.5, fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>{meta}</div>}
+  </div>;
 }
 
 function Field({ label, value }: { label: string; value: string }) {

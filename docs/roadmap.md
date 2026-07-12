@@ -251,12 +251,14 @@ Exit criteria:
 - external feedback is captured as Context, not only feature requests;
 - users can replay the provenance of at least one work item or decision.
 
-Current state (2026-07-11): MCP, routing, locking, local push notifications,
+Current state (2026-07-12): MCP, routing, locking, local push notifications,
 and Phase A process separation have passed local E2E verification. MCP writes
 are routed through `kazaned`; `kazane-privd` applies default-deny authorization
 and records every decision. The optional blank-state Start Guide now creates a
-diagnostic Context Card and first linked Work Item. Partner trial validation,
-feedback capture, simplified trust copy, and Chronicle Replay remain.
+diagnostic Context Card and first linked Work Item. Feedback Context capture,
+the Trust & Privacy explanation, and Chronicle Replay have passed local browser
+E2E verification. The remaining exit check is validation with an actual partner
+or trial user that the workflow and one recorded provenance chain are understood.
 
 ## v0.9 utsuwa / 器
 

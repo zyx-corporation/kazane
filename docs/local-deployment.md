@@ -33,9 +33,14 @@ cp "$data_dir/kazane.db" "$data_dir/kazane.db.backup-$(date +%Y%m%d-%H%M%S)"
 
 ```bash
 npm run tauri build
+codesign --force --deep --sign - src-tauri/target/release/bundle/macos/Kazane.app
+codesign --verify --deep --strict src-tauri/target/release/bundle/macos/Kazane.app
+hdiutil create -volname Kazane \
+  -srcfolder src-tauri/target/release/bundle/macos/Kazane.app \
+  -ov -format UDZO src-tauri/target/release/bundle/dmg/Kazane_0.8.0_aarch64.dmg
 hdiutil verify src-tauri/target/release/bundle/dmg/Kazane_0.8.0_aarch64.dmg
 rm -rf /Applications/Kazane.app
-cp -R src-tauri/target/release/bundle/macos/Kazane.app /Applications/Kazane.app
+ditto src-tauri/target/release/bundle/macos/Kazane.app /Applications/Kazane.app
 open -a /Applications/Kazane.app
 ```
 
@@ -66,6 +71,7 @@ startup makes process state visible to the operator.
 
 ```bash
 defaults read /Applications/Kazane.app/Contents/Info CFBundleShortVersionString
+codesign --verify --deep --strict /Applications/Kazane.app
 codesign -dv --verbose=2 /Applications/Kazane.app
 ```
 
