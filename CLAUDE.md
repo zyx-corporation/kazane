@@ -295,6 +295,8 @@ kazane-agent update <WI-ID> --agent-id <id>  # gate check付き更新
 
 実装残はなく、v0.8の未達条件は実際の外部試用者による理解確認のみ。試用で得た内容は
 `docs/feedback-context.md` の手順でContextとして記録し、推測で完了扱いにしないこと。
+外部試用は `docs/external-beta-trial.md` の観察可能な合否基準に従うこと。自動E2Eや
+エージェント自己申告で、人間による理解確認を代替しないこと。
 
 ---
 
@@ -306,3 +308,4 @@ kazane-agent update <WI-ID> --agent-id <id>  # gate check付き更新
 - `docs/feedback-context.md` — 外部フィードバック記録フロー
 - `docs/trust-and-privacy.md` — 試用者に示す現在の信頼・責任境界
 - `docs/chronicle-replay.md` — Replay対象と非公開推論を含めない境界
+- `docs/external-beta-trial.md` — v0.8外部試用の実施・合否・記録手順
