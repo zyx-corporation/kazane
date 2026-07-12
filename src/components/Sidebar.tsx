@@ -22,9 +22,10 @@ interface SidebarProps {
   t: Translations;
   onNav: (s: Screen) => void;
   onOnboarding: () => void;
+  onTrust: () => void;
 }
 
-export function Sidebar({ current, t, onNav, onOnboarding }: SidebarProps) {
+export function Sidebar({ current, t, onNav, onOnboarding, onTrust }: SidebarProps) {
   return (
     <aside style={s.sidebar}>
       <div style={s.brand}>
@@ -61,8 +62,8 @@ export function Sidebar({ current, t, onNav, onOnboarding }: SidebarProps) {
 
       <div style={s.divider} />
       <nav style={s.nav}>
-        {['Start Guide', 'Integrations'].map(label => (
-          <button key={label} onClick={label === 'Start Guide' ? onOnboarding : undefined} style={{ ...s.navBtn, color: label === 'Start Guide' ? '#79bca4' : '#7e8590', fontSize: 12 }}>
+        {['Start Guide', 'Trust & Privacy'].map(label => (
+          <button key={label} onClick={label === 'Start Guide' ? onOnboarding : onTrust} style={{ ...s.navBtn, color: label === 'Start Guide' ? '#79bca4' : '#8ba4a0', fontSize: 12 }}>
             <span style={{ ...s.navBar, background: 'transparent' }} />
             <span style={{ width: 7, height: 7, borderRadius: 2, background: '#3a3f4a', flexShrink: 0 }} />
             {label}

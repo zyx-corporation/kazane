@@ -11,6 +11,9 @@ import { NewWorkItemModal } from './components/NewWorkItemModal';
 import { NewContextCardModal } from './components/NewContextCardModal';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import type { OnboardingResult } from './components/OnboardingWizard';
+import { FeedbackContextModal } from './components/FeedbackContextModal';
+import type { FeedbackContextResult } from './components/FeedbackContextModal';
+import { TrustPrivacyPanel } from './components/TrustPrivacyPanel';
 import { FlowDashboard } from './screens/FlowDashboard';
 import { WorkBoard } from './screens/WorkBoard';
 import { ContextCards } from './screens/ContextCards';
@@ -107,6 +110,8 @@ export default function App() {
   const [wiModalOpen, setWiModalOpen] = useState(false);
   const [ctxModalOpen, setCtxModalOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [trustOpen, setTrustOpen] = useState(false);
   const [form, setForm] = useState({ title: '', domain: '顧客対応', assignee: 'AI番頭', project: '' });
   const [toast, setToast] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => loadLangFromStorage());
@@ -532,6 +537,29 @@ export default function App() {
     flash(`${contextId} と ${itemId} を作成しました`);
   }
 
+  function addFeedbackContext(result: FeedbackContextResult) {
+    const id = nextCtxId(contexts);
+    const participant = result.participant.trim() || t.feedbackAnonymous;
+    const card: ContextCard = {
+      id,
+      title: `${participant} — Feedback`,
+      question: result.feedback.trim(),
+      purpose: result.background.trim(),
+      context: `取得元: ${result.source} / 対象: ${participant}`,
+      constraint: t.feedbackConstraint,
+      past: `${new Date().toISOString()} Feedback received / consent=yes`,
+      relatedWI: [], relatedEv: [], unresolved: [result.feedback.trim()],
+      nextPolicy: t.feedbackNextPolicy,
+      cardType: 'feedback',
+    };
+    setContexts([card, ...contexts]);
+    if (IS_TAURI && dbReady) dbUpsertContextCard(card).catch(() => {});
+    setFeedbackOpen(false);
+    setCtxSel(id);
+    setScreen('context');
+    flash(`${id} Feedback Contextを記録しました`);
+  }
+
   function promoteUnresolved(text: string, domain: string, contextId: string) {
     addItem({ title: text + '（未解決点から）', domain: domain || '調査', assignee: 'AI Assistant', contextId });
     setScreen('board');
@@ -636,7 +664,7 @@ export default function App() {
     }
     try { localStorage.removeItem('kazane_items'); } catch (_) {}
     setItems([]); setContexts([]); setHandoffs([]); setEvidenceLog([]);
-    setSelId(null); setWiModalOpen(false); setCtxModalOpen(false);
+    setSelId(null); setWiModalOpen(false); setCtxModalOpen(false); setFeedbackOpen(false); setTrustOpen(false);
     flash(t.btnReset);
   }
 
@@ -649,7 +677,7 @@ export default function App() {
 
   return (
     <div style={s.root}>
-      <Sidebar current={screen} lang={lang} t={t} onNav={nav} onOnboarding={() => setOnboardingOpen(true)} />
+      <Sidebar current={screen} lang={lang} t={t} onNav={nav} onOnboarding={() => setOnboardingOpen(true)} onTrust={() => setTrustOpen(true)} />
 
       <main style={s.main}>
         {/* Header */}
@@ -707,6 +735,7 @@ export default function App() {
               onGoBoard={() => nav('board')}
               onGoRde={() => nav('rde')}
               onAddCtx={() => setCtxModalOpen(true)}
+              onAddFeedback={() => setFeedbackOpen(true)}
             />
           )}
           {screen === 'handoff' && (
@@ -781,6 +810,12 @@ export default function App() {
       {onboardingOpen && (
         <OnboardingWizard lang={lang} onClose={() => setOnboardingOpen(false)} onComplete={completeOnboarding} />
       )}
+
+      {feedbackOpen && (
+        <FeedbackContextModal lang={lang} onClose={() => setFeedbackOpen(false)} onSubmit={addFeedbackContext} />
+      )}
+
+      {trustOpen && <TrustPrivacyPanel lang={lang} onClose={() => setTrustOpen(false)} />}
 
       {/* Toast */}
       {toast && <Toast message={toast} />}
