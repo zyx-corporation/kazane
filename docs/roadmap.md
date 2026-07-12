@@ -259,6 +259,8 @@ diagnostic Context Card and first linked Work Item. Feedback Context capture,
 the Trust & Privacy explanation, and Chronicle Replay have passed local browser
 E2E verification. The remaining exit check is validation with an actual partner
 or trial user that the workflow and one recorded provenance chain are understood.
+The trial must follow `external-beta-trial.md`; automated E2E does not satisfy this
+human-validation condition.
 
 ## v0.9 utsuwa / 器
 

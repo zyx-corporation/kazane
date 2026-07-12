@@ -94,6 +94,8 @@ For external feedback and trust boundaries, see
 [docs/feedback-context.md](docs/feedback-context.md) and
 [docs/trust-and-privacy.md](docs/trust-and-privacy.md). Replay behavior is defined in
 [docs/chronicle-replay.md](docs/chronicle-replay.md).
+The remaining human validation is run with
+[docs/external-beta-trial.md](docs/external-beta-trial.md).
 
 ## Repository and branch policy
 

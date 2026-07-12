@@ -94,6 +94,8 @@ Context記録、Trust & Privacy説明、Chronicle Replayを実装済みです。
 [docs/feedback-context.md](docs/feedback-context.md) および
 [docs/trust-and-privacy.md](docs/trust-and-privacy.md)、Replayの対象範囲は
 [docs/chronicle-replay.md](docs/chronicle-replay.md) を参照してください。
+残る外部試用者による確認は
+[docs/external-beta-trial.md](docs/external-beta-trial.md) の手順で実施します。
 
 ## リポジトリとブランチ方針
 
