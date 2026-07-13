@@ -274,7 +274,18 @@ kazane-agent update <WI-ID> --agent-id <id>  # gate check付き更新
 
 ---
 
-## 次のマイルストーン: v0.8 hibiki / 響き（スコープ再定義済み）
+## 現在のマイルストーン: v0.9 utsuwa / 器
+
+v0.8の実装は完了。人間による外部試用だけをWI-900として継続し、技術作業は
+v0.9へ進む。詳細な順序・依存・Evidence・出口条件は
+`docs/v0.9-product-candidate-plan.md` を正とする。
+
+最初の実装スライスはWI-901（backup/restore）とWI-902（利用者・ロールモデル）。
+Remote GUIはWI-909でADR境界を確定するだけで、v0.9の実装対象にしない。
+
+---
+
+## 完了マイルストーン: v0.8 hibiki / 響き（実試用ゲートのみ継続）
 
 **確定スコープ（2026-06-30）:** 元ロードマップの「外部ベータ・テンプレート」より**外部エージェント協働インフラを優先**する。  
 **完了条件:** KazaneがオーケストレーターとしてAI番頭などの外部エージェントを指揮できる状態になること。
@@ -309,3 +320,4 @@ kazane-agent update <WI-ID> --agent-id <id>  # gate check付き更新
 - `docs/trust-and-privacy.md` — 試用者に示す現在の信頼・責任境界
 - `docs/chronicle-replay.md` — Replay対象と非公開推論を含めない境界
 - `docs/external-beta-trial.md` — v0.8外部試用の実施・合否・記録手順
+- `docs/v0.9-product-candidate-plan.md` — v0.9の優先順・依存・Evidence・出口条件

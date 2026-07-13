@@ -264,19 +264,33 @@ human-validation condition.
 
 ## v0.9 utsuwa / 器
 
-Product candidate.
+Local product candidate. The ordered execution plan is maintained in
+[`v0.9-product-candidate-plan.md`](v0.9-product-candidate-plan.md).
 
-Features:
+Execution order:
 
-- user/role model;
-- deployment guide;
-- trust and privacy guide;
-- backup/restore;
-- onboarding;
-- product website copy;
-- pricing draft;
-- support boundary;
-- Chronicle Replay hardening.
+1. close the observed v0.8 external-trial gate while implementing backup/restore
+   and the user/role model in parallel;
+2. enforce permissions, harden first-run setup, add diagnostics/support export,
+   and harden Chronicle Replay;
+3. establish the signed candidate distribution path and evidence-backed product,
+   trust, support, and pricing materials;
+4. resolve the Remote GUI ADR boundary without making Remote GUI runtime a v0.9
+   exit dependency;
+5. run a clean-machine Product Candidate rehearsal.
+
+Exit criteria:
+
+- local data survives a verified backup/restore round trip;
+- owner/operator/reviewer/agent permissions are enforced and audited;
+- a clean macOS user can install, onboard, locate data, export diagnostics, and
+  follow recovery documentation;
+- Replay handles missing and long histories without inventing provenance;
+- product and support materials distinguish current behavior from non-promises;
+- a reproducible candidate build and rollback report are linked as Evidence.
+
+Non-goals are cloud-first storage, multi-tenancy, billing, and production Remote
+GUI. See ADR-0014 for the design gate.
 
 ## v1.0 kanade / 奏で
 

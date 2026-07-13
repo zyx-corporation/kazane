@@ -33,4 +33,6 @@ Remote operations become explicit, scoped, and auditable. The tradeoff is extra 
 - Supplemented: external authentication, relay, scoped sessions, and remote approval flows.
 - Unresolved: IdP choice, session model, relay topology, and offline behavior.
 - Deviation risk: remote GUI may drift into cloud-first architecture.
-- Next update: define remote GUI read-only and approval-only roles.
+- Next update: in WI-909, define read-only and approval-only roles, scoped session
+  claims, relay topology, audit events, and explicit implementation prerequisites.
+  Production Remote GUI runtime is not a v0.9 exit criterion.
