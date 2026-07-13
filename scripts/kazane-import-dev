@@ -1398,6 +1398,29 @@ AGENT_PROFILES = [
 ]
 
 # ─────────────────────────────────────────────
+# Users（v0.9 ロールモデル）
+# ─────────────────────────────────────────────
+USERS = [
+    {
+        "id": "USR-owner-tomyuk",
+        "name": "加納 智之",
+        "email": "tomyuk@zyxcorp.jp",
+        "role": "owner",
+        "enabled": 1,
+        "created_at": "2026-07-13T00:00:00",
+    },
+    {
+        "id": "USR-op-zyxcorp",
+        "name": "ZYX Corp Operator",
+        "email": "info@zyxcorp.jp",
+        "role": "operator",
+        "enabled": 1,
+        "created_at": "2026-07-13T00:00:00",
+    },
+]
+
+
+# ─────────────────────────────────────────────
 # Events（Work Timeline 用）
 # ─────────────────────────────────────────────
 EVENTS = [
@@ -1565,6 +1588,12 @@ def main():
             VALUES (?,?,?,?,?,?,?)
         """, (a["id"], a["name"], a["model"], a["trust_level"],
               a["capabilities_json"], a["gate_perm"], a["gate_stops"]))
+
+    for u in USERS:
+        cur.execute("""
+            INSERT OR REPLACE INTO users (id, name, email, role, enabled, created_at)
+            VALUES (?,?,?,?,?,?)
+        """, (u["id"], u["name"], u["email"], u["role"], u["enabled"], u["created_at"]))
 
     con.commit()
     con.close()

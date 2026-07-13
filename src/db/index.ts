@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile, GitHubLink, DeviationRisk, CardType, WorkItemSource } from '../types';
+import type { WorkItem, ContextCard, HandoffNote, WorkEvent, EvidenceLogEntry, TrustLevel, GateRule, AgentProfile, GitHubLink, DeviationRisk, CardType, WorkItemSource, User, UserRole } from '../types';
 
 let _db: Database | null = null;
 
@@ -319,5 +319,35 @@ function rowToCtx(r: Record<string, unknown>): ContextCard {
     customerEmail: r.customer_email as string | undefined || undefined,
     customerPhone: r.customer_phone as string | undefined || undefined,
     customerRelationship: r.customer_relationship as string | undefined || undefined,
+  };
+}
+
+// ---------- Users ----------
+
+export async function dbListUsers(): Promise<User[]> {
+  const d = await db();
+  const rows = await d.select<Record<string, unknown>[]>('SELECT * FROM users ORDER BY created_at');
+  return rows.map(rowToUser);
+}
+
+export async function dbUpsertUser(user: User): Promise<void> {
+  const d = await db();
+  await d.execute(
+    `INSERT INTO users (id, name, email, role, enabled, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT(id) DO UPDATE SET
+       name=$2, email=$3, role=$4, enabled=$5`,
+    [user.id, user.name, user.email, user.role, user.enabled ? 1 : 0, user.createdAt],
+  );
+}
+
+function rowToUser(r: Record<string, unknown>): User {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    email: r.email as string,
+    role: (r.role as UserRole) ?? 'operator',
+    enabled: (r.enabled as number) === 1,
+    createdAt: r.created_at as string,
   };
 }
