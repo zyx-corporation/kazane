@@ -23,9 +23,10 @@ interface SidebarProps {
   onNav: (s: Screen) => void;
   onOnboarding: () => void;
   onTrust: () => void;
+  onDataLocation: () => void;
 }
 
-export function Sidebar({ current, t, onNav, onOnboarding, onTrust }: SidebarProps) {
+export function Sidebar({ current, t, onNav, onOnboarding, onTrust, onDataLocation }: SidebarProps) {
   return (
     <aside style={s.sidebar}>
       <div style={s.brand}>
@@ -62,8 +63,12 @@ export function Sidebar({ current, t, onNav, onOnboarding, onTrust }: SidebarPro
 
       <div style={s.divider} />
       <nav style={s.nav}>
-        {['Start Guide', 'Trust & Privacy'].map(label => (
-          <button key={label} onClick={label === 'Start Guide' ? onOnboarding : onTrust} style={{ ...s.navBtn, color: label === 'Start Guide' ? '#79bca4' : '#8ba4a0', fontSize: 12 }}>
+        {([
+          { label: 'Start Guide', color: '#79bca4', action: onOnboarding },
+          { label: 'Data Location', color: '#5b8def', action: onDataLocation },
+          { label: 'Trust & Privacy', color: '#8ba4a0', action: onTrust },
+        ] as const).map(({ label, color, action }) => (
+          <button key={label} onClick={action} style={{ ...s.navBtn, color, fontSize: 12 }}>
             <span style={{ ...s.navBar, background: 'transparent' }} />
             <span style={{ width: 7, height: 7, borderRadius: 2, background: '#3a3f4a', flexShrink: 0 }} />
             {label}

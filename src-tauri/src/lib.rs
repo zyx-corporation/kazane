@@ -281,6 +281,13 @@ fn app_version() -> String {
 }
 
 #[tauri::command]
+async fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
+    app.path().app_data_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_agent_dirs(app: tauri::AppHandle) -> Result<AgentDirs, String> {
     let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let tasks_dir = base.join("tasks");
@@ -378,6 +385,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_version,
+            get_app_data_dir,
             get_agent_dirs,
             write_agent_task,
             poll_agent_handoffs,
