@@ -35,6 +35,14 @@ WRITE_OPERATIONS = {
     "mail_import", "calendar_import",
 }
 
+# Operations reviewer role may never initiate
+REVIEWER_DENIED_OPERATIONS = {
+    "create_work_item", "update_work_item", "mail_import", "calendar_import",
+}
+
+# Operations only owner role may initiate (regardless of agent_profiles)
+OWNER_ONLY_OPERATIONS: set[str] = set()  # reserved for future privileged ops
+
 
 def now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -105,15 +113,44 @@ def audit_authorization(agent_id: str, operation: str, arguments: dict[str, Any]
         con.close()
 
 
+def _lookup_user_role(user_id: str) -> str | None:
+    """Return the role string for a human user, or None if not found."""
+    try:
+        con = sqlite3.connect(DB_PATH)
+        row = con.execute(
+            "SELECT role, enabled FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        con.close()
+        if row and row[1]:  # enabled=1
+            return row[0]
+    except Exception:
+        pass
+    return None
+
+
 def authorize(arguments: dict[str, Any]) -> dict[str, Any]:
     agent_id = str(arguments.get("agent_id", ""))
+    user_id = str(arguments.get("user_id", ""))
     operation = str(arguments.get("requested_operation", ""))
     payload = arguments.get("payload") or {}
+
     if operation not in WRITE_OPERATIONS:
         result = {"allowed": False, "reason": "unknown operation: default deny"}
-    elif not agent_id:
-        result = {"allowed": False, "reason": "agent_id is required for state-changing operations"}
+    elif not agent_id and not user_id:
+        result = {"allowed": False, "reason": "agent_id or user_id is required for state-changing operations"}
+    elif user_id:
+        # Human user path: role-based check
+        role = _lookup_user_role(user_id)
+        if role is None:
+            result = {"allowed": False, "reason": f"unknown or disabled user: {user_id}"}
+        elif operation in OWNER_ONLY_OPERATIONS and role != "owner":
+            result = {"allowed": False, "reason": f"operation {operation!r} requires owner role (caller has {role!r})"}
+        elif role == "reviewer" and operation in REVIEWER_DENIED_OPERATIONS:
+            result = {"allowed": False, "reason": f"reviewer role may not perform {operation!r}"}
+        else:
+            result = {"allowed": True, "reason": f"user role {role!r} permits {operation!r}"}
     else:
+        # Agent path: agent_profiles gate_stops check
         con = sqlite3.connect(DB_PATH)
         row = con.execute("SELECT gate_stops FROM agent_profiles WHERE id=?", (agent_id,)).fetchone()
         con.close()
@@ -126,7 +163,9 @@ def authorize(arguments: dict[str, Any]) -> dict[str, Any]:
                 {"allowed": False, "reason": f"gate stop matched: {matched}"}
                 if matched else {"allowed": True, "reason": "known typed operation within agent profile"}
             )
-    audit_authorization(agent_id, operation, payload, "allow" if result["allowed"] else "deny", result["reason"])
+
+    actor = user_id or agent_id
+    audit_authorization(actor, operation, payload, "allow" if result["allowed"] else "deny", result["reason"])
     return result
 
 

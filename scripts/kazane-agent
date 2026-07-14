@@ -29,6 +29,7 @@
 #   kazane-agent backup-list                    — list available backups
 #   kazane-agent user-list                      — list users and roles
 #   kazane-agent user-add --id <id> --name <name> --email <email> --role <role> — add user
+#   kazane-agent diagnostics [--output <path>]  — export support bundle (emails redacted)
 #
 # create options:
 #   --title <text>       Work item title (required)
@@ -1271,6 +1272,113 @@ try:
     print(f"User added: {id_}  name={name}  email={email}  role={role}")
 finally:
     con.close()
+PYEOF
+    ;;
+
+  diagnostics)
+    diag_output=""
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --output|-o) diag_output="$2"; shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ ! -f "$DB_PATH" ]; then
+      echo "Error: DB not found at $DB_PATH" >&2; exit 1
+    fi
+
+    python3 - "$DB_PATH" "$diag_output" <<'PYEOF'
+import datetime, json, os, re, sqlite3, sys
+
+db_path = sys.argv[1]
+output_arg = sys.argv[2]
+stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+output_path = output_arg if output_arg else os.path.join(
+    os.path.dirname(db_path), f"kazane_diagnostics_{stamp}.json"
+)
+
+def redact_email(text):
+    if not text:
+        return text
+    return re.sub(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}',
+                  '[email redacted]', str(text))
+
+con = sqlite3.connect(db_path)
+con.row_factory = sqlite3.Row
+
+tables = [r[0] for r in con.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+).fetchall()]
+
+table_counts = {}
+for t in tables:
+    if t.startswith("_"):
+        continue
+    table_counts[t] = con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+
+recent_events = []
+try:
+    for row in con.execute(
+        "SELECT id,wi_id,event_type,actor,note,created_at FROM events ORDER BY created_at DESC LIMIT 20"
+    ).fetchall():
+        recent_events.append({
+            "id": row["id"], "wi_id": row["wi_id"], "event_type": row["event_type"],
+            "actor": row["actor"], "note": redact_email(row["note"]),
+            "created_at": row["created_at"],
+        })
+except Exception:
+    pass
+
+agent_profiles = []
+try:
+    for row in con.execute("SELECT id,name,role,trust_level FROM agent_profiles ORDER BY id").fetchall():
+        agent_profiles.append({"id": row["id"], "name": row["name"],
+                                "trust_level": row["trust_level"]})
+except Exception:
+    pass
+
+users_summary = []
+try:
+    for row in con.execute("SELECT id,name,role,enabled FROM users ORDER BY role,name").fetchall():
+        users_summary.append({"id": row["id"], "name": row["name"],
+                               "role": row["role"], "enabled": bool(row["enabled"])})
+except Exception:
+    pass
+
+migration_version = 0
+try:
+    rows = con.execute("SELECT version FROM _sqlx_migrations ORDER BY version DESC").fetchall()
+    if rows:
+        migration_version = max(r[0] for r in rows)
+except Exception:
+    pass
+
+db_size = os.path.getsize(db_path)
+backup_dir = os.path.join(os.path.dirname(db_path), "backups")
+backup_count = len([f for f in os.listdir(backup_dir) if f.endswith(".db")]) if os.path.exists(backup_dir) else 0
+
+con.close()
+
+bundle = {
+    "generated_at": stamp,
+    "db_path": db_path,
+    "db_size_bytes": db_size,
+    "migration_version": migration_version,
+    "backup_count": backup_count,
+    "table_row_counts": table_counts,
+    "agent_profiles": agent_profiles,
+    "users": users_summary,
+    "recent_events": recent_events,
+}
+
+with open(output_path, "w", encoding="utf-8") as f:
+    json.dump(bundle, f, ensure_ascii=False, indent=2)
+
+print(f"Diagnostics saved: {output_path}")
+print(f"  DB size: {db_size:,} bytes  Migration: v{migration_version}  Backups: {backup_count}")
+print(f"  Tables: {table_counts}")
 PYEOF
     ;;
 
