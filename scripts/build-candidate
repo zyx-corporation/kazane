@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# build-candidate — Build, sign, and notarize Kazane Product Candidate
+#
+# Prerequisites:
+#   1. Apple Developer account enrolled in the Apple Developer Program
+#   2. "Developer ID Application" certificate installed in Keychain
+#   3. Set env vars (or use keychain profile):
+#      APPLE_SIGNING_IDENTITY  — e.g. "Developer ID Application: ZYX Corp (TEAMID)"
+#      APPLE_ID                — Apple ID email for notarization
+#      APPLE_PASSWORD          — App-specific password (not your Apple ID password)
+#      APPLE_TEAM_ID           — Apple Team ID (10-char string)
+#
+# Usage:
+#   APPLE_SIGNING_IDENTITY="Developer ID Application: ..." \
+#   APPLE_ID="you@example.com" \
+#   APPLE_PASSWORD="xxxx-xxxx-xxxx-xxxx" \
+#   APPLE_TEAM_ID="XXXXXXXXXX" \
+#   scripts/build-candidate
+#
+# Without signing (unsigned candidate for local testing only):
+#   scripts/build-candidate --no-sign
+#
+# Output:
+#   src-tauri/target/release/bundle/dmg/Kazane_*.dmg
+
+set -euo pipefail
+
+NO_SIGN=false
+for arg in "$@"; do
+  [[ "$arg" == "--no-sign" ]] && NO_SIGN=true
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
+VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+echo "Building Kazane v${VERSION} Product Candidate..."
+
+# ── 1. Type-check & frontend build ────────────────────────────────────────
+echo "→ tsc + vite build"
+npm run build
+
+# ── 2. Rust / Tauri build ─────────────────────────────────────────────────
+if [ "$NO_SIGN" = true ]; then
+  echo "→ cargo build (unsigned)"
+  npm run tauri build -- --no-bundle 2>&1 | tail -5
+  # Copy .app for unsigned testing
+  APP_SRC="src-tauri/target/release/bundle/macos/Kazane.app"
+  if [ ! -d "$APP_SRC" ]; then
+    echo "Warning: .app bundle not found at $APP_SRC, skipping copy" >&2
+  fi
+  echo "Unsigned build complete. No DMG produced."
+  exit 0
+fi
+
+# ── 3. Signed build ───────────────────────────────────────────────────────
+if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  echo "Error: APPLE_SIGNING_IDENTITY is not set." >&2
+  echo "  Set it to your 'Developer ID Application: ...' certificate name." >&2
+  echo "  Or run with --no-sign for an unsigned local build." >&2
+  exit 1
+fi
+
+echo "→ tauri build with signing identity: ${APPLE_SIGNING_IDENTITY}"
+
+APPLE_SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
+npm run tauri build 2>&1 | grep -E "^(error|warning\[|   Compiling|    Finished|Bundling|Signing|✓|✗)" || true
+
+DMG_PATH=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -1)
+if [ -z "$DMG_PATH" ]; then
+  echo "Error: DMG not found after build." >&2; exit 1
+fi
+
+# ── 4. Notarize ───────────────────────────────────────────────────────────
+if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
+  echo "→ Notarizing: $DMG_PATH"
+  xcrun notarytool submit "$DMG_PATH" \
+    --apple-id "$APPLE_ID" \
+    --password "$APPLE_PASSWORD" \
+    --team-id "$APPLE_TEAM_ID" \
+    --wait
+  echo "→ Stapling notarization ticket"
+  xcrun stapler staple "$DMG_PATH"
+  echo "✓ Notarization complete"
+else
+  echo "Warning: APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID not set — skipping notarization." >&2
+  echo "  The DMG is signed but not notarized. macOS Gatekeeper will warn on first launch." >&2
+fi
+
+# ── 5. Verify signature ───────────────────────────────────────────────────
+APP_PATH=$(find src-tauri/target/release/bundle/macos -name "*.app" 2>/dev/null | head -1)
+if [ -n "$APP_PATH" ]; then
+  echo "→ Verifying signature"
+  codesign --verify --deep --strict "$APP_PATH" && echo "  Signature: valid"
+  spctl --assess --type exec "$APP_PATH" 2>&1 | head -3 || true
+fi
+
+echo ""
+echo "✓ Candidate build: $DMG_PATH"
+echo "  Version: ${VERSION}"
+echo "  Size: $(du -sh "$DMG_PATH" | cut -f1)"

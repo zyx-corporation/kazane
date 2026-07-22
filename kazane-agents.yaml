@@ -1,0 +1,133 @@
+# kazane-agents.yaml — Kazane Agent Runtime Configuration
+#
+# Declares the infrastructure daemons and AI agent roster for autonomous
+# task execution. Consumed by `kazane-agent start | stop | ps`.
+#
+# Three layers of autonomous execution:
+#   1. Daemons       — always-on broker + control plane (started by `kazane-agent start`)
+#   2. Watch trigger — kazane-agent watch, loops until a WI arrives in col=ai
+#   3. AI executor   — the command that actually does the work (must be started manually)
+#
+# For watch-trigger agents, the full autonomous loop is:
+#   kazane-agent watch --timeout 300   # blocks until task arrives (exit 0)
+#   kazane-agent pickup --agent-id $ID # acquires lock, prints task JSON
+#   <executor.command> <executor.args> # AI session handles task via MCP
+#   kazane-agent submit $WI_ID         # releases lock, triggers app import
+
+version: "1"
+
+# ── Infrastructure daemons ─────────────────────────────────────────────────
+# Persistent background processes managed by kazane-agent start/stop/ps.
+# Each entry has a `command` that supports the start/stop/status subcommands.
+
+daemons:
+  kazane-agentd:
+    command: scripts/kazane-agentd
+    description: "Push notification broker — Unix domain socket, low-latency task assignment"
+
+  kazaned:
+    command: scripts/kazaned
+    description: "State-change control plane — privileged ops, audit log"
+
+  kazane-privd:
+    command: scripts/kazane-privd
+    description: "Authorization boundary — default-deny policy and audit decisions"
+
+# ── AI agents ─────────────────────────────────────────────────────────────
+# Maps to agent_profiles rows in kazane.db.
+#
+# trigger.type:
+#   watch  — agent auto-picks up WIs that enter col=ai for its domains
+#             Start loop: while true; do kazane-agent watch && <executor>; done
+#   manual — human-initiated; no background process required
+#
+# executor.type:
+#   mcp    — AI runs as a Claude Code session with kazane-mcp attached
+#   cli    — AI runs as an interactive CLI session
+
+agents:
+  - id: AGT-01
+    name: AI番頭
+    domains: [顧客対応, 営業]
+    trigger:
+      type: watch
+      timeout_sec: 300
+    executor:
+      type: mcp
+      command: claude
+      args: ["--mcp-config", ".mcp.json"]
+
+  - id: AGT-02
+    name: AI Assistant
+    domains: [AI番頭, 汎用]
+    trigger:
+      type: watch
+      timeout_sec: 300
+    executor:
+      type: mcp
+      command: claude
+      args: ["--mcp-config", ".mcp.json"]
+
+  - id: AGT-03
+    name: Claude Code
+    domains: [開発]
+    trigger:
+      type: manual
+    executor:
+      type: cli
+      command: claude
+
+  - id: AGT-04
+    name: Codex
+    domains: [開発]
+    trigger:
+      type: manual
+    executor:
+      type: cli
+      command: codex
+
+  - id: AGT-05
+    name: ローカルLLM
+    domains: [汎用]
+    trigger:
+      type: manual
+    executor:
+      type: cli
+      command: ollama
+      args: [run, llama3]
+
+  - id: AGT-DEV-TL
+    name: Tech Lead
+    domains: [開発]
+    trigger:
+      type: manual
+    executor:
+      type: cli
+      command: claude
+
+  - id: AGT-DEV-QA
+    name: QA
+    domains: [開発]
+    trigger:
+      type: manual
+    executor:
+      type: cli
+      command: claude
+
+  - id: AGT-DEV-RVW
+    name: Reviewer
+    domains: [開発]
+    trigger:
+      type: manual
+    executor:
+      type: cli
+      command: claude
+
+  - id: AGT-DEV-RDE
+    name: RDE Auditor
+    domains: [開発]
+    trigger:
+      type: manual
+    executor:
+      type: cli
+      command: claude

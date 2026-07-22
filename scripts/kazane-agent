@@ -30,6 +30,9 @@
 #   kazane-agent user-list                      — list users and roles
 #   kazane-agent user-add --id <id> --name <name> --email <email> --role <role> — add user
 #   kazane-agent diagnostics [--output <path>]  — export support bundle (emails redacted)
+#   kazane-agent start                          — start infrastructure daemons (kazane-agentd, kazaned)
+#   kazane-agent stop                           — stop all infrastructure daemons
+#   kazane-agent ps                             — show daemon status and AI agent roster
 #
 # create options:
 #   --title <text>       Work item title (required)
@@ -1433,6 +1436,133 @@ Claude Code (MCP) でカレンダーを確認:
 
 === デモ完了 ===
 DEMOEOF
+    ;;
+
+  start|stop|ps)
+    AGENTS_YAML="${KAZANE_AGENTS_YAML:-$(cd "$(dirname "$0")/.." && pwd)/kazane-agents.yaml}"
+    SCRIPT_DIR_ABS="$(cd "$(dirname "$0")" && pwd)"
+    python3 - "$cmd" "$AGENTS_YAML" "$SCRIPT_DIR_ABS" <<'PYEOF'
+import sys, os, re, subprocess
+
+cmd_name, agents_yaml, script_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+
+if not os.path.exists(agents_yaml):
+    print(f"Error: {agents_yaml} not found\nRun from repo root or set KAZANE_AGENTS_YAML.", file=sys.stderr)
+    sys.exit(1)
+
+def parse_config(path):
+    daemons, agents = {}, []
+    section = cur_daemon = cur_agent = None
+    in_trigger = in_executor = False
+    for raw in open(path, encoding="utf-8"):
+        line = raw.rstrip("\n")
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 0:
+            section = stripped.rstrip(":")
+            cur_daemon = cur_agent = None
+            in_trigger = in_executor = False
+            continue
+        if section == "daemons":
+            if indent == 2 and stripped.endswith(":"):
+                cur_daemon = stripped.rstrip(":")
+                daemons[cur_daemon] = {}
+            elif cur_daemon and indent == 4:
+                m = re.match(r"^    (\w+):\s*(.*)", line)
+                if m:
+                    daemons[cur_daemon][m.group(1)] = m.group(2).strip().strip("\"'")
+        elif section == "agents":
+            if indent == 2 and stripped.startswith("- "):
+                cur_agent = {"trigger": {}, "executor": {}}
+                agents.append(cur_agent)
+                in_trigger = in_executor = False
+                m = re.match(r"^  - ([\w][\w_-]*):\s*(.*)", line)
+                if m:
+                    cur_agent[m.group(1)] = m.group(2).strip().strip("\"'")
+            elif cur_agent is not None and indent == 4:
+                if stripped == "trigger:":
+                    in_trigger, in_executor = True, False
+                elif stripped == "executor:":
+                    in_trigger, in_executor = False, True
+                else:
+                    in_trigger = in_executor = False
+                    m = re.match(r"^    ([\w][\w_-]*):\s*(.*)", line)
+                    if m:
+                        cur_agent[m.group(1)] = m.group(2).strip().strip("\"'")
+            elif cur_agent is not None and indent == 6:
+                m = re.match(r"^      ([\w][\w_-]*):\s*(.*)", line)
+                if m:
+                    key, val = m.group(1), m.group(2).strip().strip("\"'")
+                    if in_trigger:
+                        cur_agent["trigger"][key] = val
+                    elif in_executor:
+                        cur_agent["executor"][key] = val
+    return daemons, agents
+
+def daemon_script(cfg, script_dir):
+    cmd_path = cfg.get("command", "")
+    return os.path.join(script_dir, os.path.basename(cmd_path))
+
+def daemon_status(script):
+    if not os.path.exists(script):
+        return "script not found"
+    r = subprocess.run([script, "status"], capture_output=True, text=True)
+    return (r.stdout + r.stderr).strip()
+
+def exec_str(agent):
+    cmd = agent.get("executor", {}).get("command", "?")
+    args = agent.get("executor", {}).get("args", "")
+    if args and args not in ("[]", ""):
+        args = args.strip("[]").replace('"', "").replace(", ", " ")
+        return f"{cmd} {args}"
+    return cmd
+
+daemons, agents = parse_config(agents_yaml)
+
+if cmd_name in ("start", "stop"):
+    label = "Starting" if cmd_name == "start" else "Stopping"
+    print(f"{label} Kazane daemons...")
+    for name, cfg in daemons.items():
+        script = daemon_script(cfg, script_dir)
+        if not os.path.exists(script):
+            print(f"  {name}: script not found ({script})", file=sys.stderr)
+            continue
+        r = subprocess.run([script, cmd_name], capture_output=True, text=True)
+        print(f"  {name}: {(r.stdout + r.stderr).strip()}")
+
+elif cmd_name == "ps":
+    print("=== Kazane Agent Runtime ===\n")
+    print("Daemons:")
+    for name, cfg in daemons.items():
+        script = daemon_script(cfg, script_dir)
+        status = daemon_status(script)
+        desc = cfg.get("description", "")
+        print(f"  {name:<22} {status:<36} {desc}")
+
+    print("\nAgent roster:")
+    for a in agents:
+        aid = a.get("id", "?")
+        name = a.get("name", "?")
+        domains_raw = a.get("domains", "[]").strip("[]").replace('"', '').replace(", ", "/")
+        ttype = a.get("trigger", {}).get("type", "?")
+        print(f"  {aid:<14} {name:<16} {ttype:<6} [{domains_raw}]  → {exec_str(a)}")
+
+    watch_agents = [a for a in agents if a.get("trigger", {}).get("type") == "watch"]
+    if watch_agents:
+        print("\nWatch-trigger agent startup:")
+        for a in watch_agents:
+            aid = a.get("id", "?")
+            timeout = a.get("trigger", {}).get("timeout_sec", "300")
+            ec = exec_str(a)
+            print(f"  # {aid} ({a.get('name', '')})")
+            print(f"  while true; do")
+            print(f"    kazane-agent watch --timeout {timeout} && \\")
+            print(f"    kazane-agent pickup --agent-id {aid} && \\")
+            print(f"    {ec}")
+            print(f"  done")
+PYEOF
     ;;
 
   help|--help|-h)

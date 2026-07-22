@@ -1,16 +1,76 @@
-# Trust and Privacy
+# Kazane — Trust, Privacy, and Responsibility（v0.9）
 
-The **Trust & Privacy** panel in the sidebar gives trial users the operating
-boundary before they delegate work to an AI agent.
+## データの保存場所
 
-- Work Items, Context, Handoffs, and Evidence are stored in local SQLite.
-- AI may organize, research, and draft, but does not assume human responsibility.
-- A Gate stop is a normal return of judgment to a human, not an agent failure.
-- External-agent writes pass through the control and privilege processes with an
-  actor identity and allow/deny audit record.
-- Chronicle Replay displays recorded Context, Events, Handoffs, and Evidence. It
-  does not store or present private model reasoning.
+Kazane のすべてのデータは **ローカル macOS のみ** に保存されます。
 
-These statements describe the current local application. Remote access, external
-connectors, backups, and public distribution require their own reviewed privacy and
-security boundaries before use.
+```
+~/Library/Application Support/jp.zyxcorp.kazane/
+├── kazane.db          — SQLite（Work Item・Context・Handoff・Evidence・ユーザー・監査ログ）
+├── backups/           — 手動で作成したバックアップ
+├── tasks/             — エージェントタスクキュー（JSON）
+└── handoffs/          — エージェントが書き出したHandoff Note（JSON）
+```
+
+クラウドサービス・外部サーバー・ZYX Corpへのデータ送信は行いません。
+
+## 収集するデータ
+
+Kazane が保存するのは、ユーザーが明示的に作成または取り込んだデータのみです：
+
+- Work Item（タイトル・状態・担当・リスク・次のアクション）
+- Context Card（汎用カード・顧客情報）
+- Handoff Note（エージェントまたは人間が記録した引き継ぎ）
+- Evidence Log（コマンド実行結果・判断根拠・外部リンク）
+- Gate Rule・Agent Profile
+- ユーザー登録情報（ID・名前・メールアドレス・ロール）
+- 認可操作ログ（操作種別・実行者・判定・理由・日時）
+
+## 収集しないデータ
+
+- 使用状況テレメトリー
+- クラッシュレポート（自動送信なし）
+- AI モデルの内部推論・プロンプト内容
+- macOS ユーザー以外がアクセスできないデータへのアクセス
+
+## AI エージェントとの境界
+
+Kazane は AI エージェントの実行基盤を提供しますが、AI モデル自体は含みません。
+
+- AI エージェント（Claude Code など）は MCP または CLI 経由で Kazane に接続します
+- すべての書き込み操作（Work Item 更新・Handoff 提出など）は
+  `actor_id`（エージェント ID またはユーザー ID）と判定理由を認可ログに記録します
+- エージェントは `agent_profiles.gate_stops` で定義された操作を実行できません
+- reviewer ロールのユーザーは新規 Work Item 作成・更新を行えません
+
+**AI アウトプットの責任**：Kazane に記録された AI 生成コンテンツはすべて人間がレビューした上で使用してください。Gate stop は AI のエラーではなく、判断を人間に返す正常な設計動作です。
+
+## Chronicle Replay の境界
+
+- Replay が表示するのは、記録された Context・Events・Handoff・Evidence のみです
+- AI モデルの内部推論・思考プロセス・削除されたドラフトは表示しません
+- ログに記録されていない操作は Replay に現れません
+
+## 責任境界
+
+| 領域 | Kazane が提供するもの | ユーザーの責任 |
+|------|----------------------|---------------|
+| データ保護 | ローカル SQLite による構造化保存 | バックアップの定期実行、macOS アカウントの保護 |
+| アクセス制御 | ロールベース認可・操作監査ログ | ユーザー登録・ロール割当の適切な管理 |
+| AI アウトプット | Handoff/Evidence への記録・トレーサビリティ | すべての AI 生成コンテンツの最終判断 |
+| データ暗号化 | なし（v0.9） | macOS FileVault 等の利用を推奨 |
+| ネットワークセキュリティ | 外部通信なし（GitHub Issue 同期を除く） | 外部エージェント接続先の選定 |
+
+## v0.9 製品候補の制限事項
+
+以下は v0.9 時点で実装されていない機能です。将来の実装を約束するものではありません：
+
+- クラウド同期・バックアップ
+- リモートアクセス・リモート GUI
+- マルチマシン・マルチユーザーリアルタイム協働
+- データ暗号化（保存時）
+- 自動テレメトリー・クラッシュ報告
+- SLA・サポート保証（Product Candidate のため）
+
+これらの記述は **現在の v0.9 ローカルアプリケーション** について述べています。
+リモートアクセス・外部コネクタ・公開配布は、それぞれ独立したプライバシー・セキュリティ審査が必要です。
