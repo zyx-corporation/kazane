@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import type { Lang } from '../types';
 
 interface Props {
@@ -17,9 +18,11 @@ const COPY = {
     diagLabel: '診断情報',
     backupNote: 'バックアップを作成:',
     restoreNote: 'バックアップから復元:',
-    diagNote: '診断バンドルを出力（メールは伏字）:',
-    docsLabel: '詳細ドキュメント',
-    docsPath: 'docs/setup-and-recovery.md',
+    diagNote: '個人情報を含まない診断情報を出力:',
+    restoreGuide: '復元するときはKazaneを終了し、現在のkazane.dbを退避してから、backupsフォルダ内のバックアップで置き換えます。',
+    createBackup: 'バックアップを作成', exportDiagnostics: '診断情報を出力', showInFinder: 'Finderで表示',
+    backupSuccess: '整合性確認済みのバックアップを作成しました。', diagSuccess: '個人情報を含まない診断情報を出力しました。',
+    failed: '処理に失敗しました', loading: '処理中…', loadingPath: '読み込み中…', appOnly: 'この操作はKazaneアプリで利用できます。',
     tip: 'ヒント: 重要な作業の前後にバックアップを取ることをお勧めします。',
     close: '閉じる',
     copied: 'コピーしました',
@@ -33,9 +36,11 @@ const COPY = {
     diagLabel: 'Diagnostics',
     backupNote: 'Create a backup:',
     restoreNote: 'Restore from backup:',
-    diagNote: 'Export a support bundle (emails redacted):',
-    docsLabel: 'Full documentation',
-    docsPath: 'docs/setup-and-recovery.md',
+    diagNote: 'Export diagnostics without personal data:',
+    restoreGuide: 'To restore, quit Kazane, preserve the current kazane.db, then replace it with a database from the backups folder.',
+    createBackup: 'Create backup', exportDiagnostics: 'Export diagnostics', showInFinder: 'Show in Finder',
+    backupSuccess: 'Created an integrity-checked backup.', diagSuccess: 'Exported diagnostics without personal data.',
+    failed: 'Operation failed', loading: 'Working…', loadingPath: 'Loading…', appOnly: 'This operation is available in the Kazane app.',
     tip: 'Tip: Back up before and after important work sessions.',
     close: 'Close',
     copied: 'Copied',
@@ -49,9 +54,11 @@ const COPY = {
     diagLabel: '诊断信息',
     backupNote: '创建备份：',
     restoreNote: '从备份恢复：',
-    diagNote: '导出支持包（邮件已脱敏）：',
-    docsLabel: '详细文档',
-    docsPath: 'docs/setup-and-recovery.md',
+    diagNote: '导出不含个人信息的诊断数据：',
+    restoreGuide: '恢复时请退出 Kazane，先保留当前 kazane.db，再用 backups 文件夹中的备份替换它。',
+    createBackup: '创建备份', exportDiagnostics: '导出诊断信息', showInFinder: '在访达中显示',
+    backupSuccess: '已创建并通过完整性检查的备份。', diagSuccess: '已导出不含个人信息的诊断信息。',
+    failed: '操作失败', loading: '处理中…', loadingPath: '读取中…', appOnly: '此操作只能在 Kazane 应用中使用。',
     tip: '提示：建议在重要工作前后创建备份。',
     close: '关闭',
     copied: '已复制',
@@ -73,19 +80,21 @@ function CodeLine({ text, onCopy }: { text: string; onCopy: (t: string) => void 
 
 export function DataLocationPanel({ lang, onClose }: Props) {
   const c = COPY[lang];
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   const [dataDir, setDataDir] = useState<string | null>(null);
   const [copiedMsg, setCopiedMsg] = useState('');
+  const [busy, setBusy] = useState<'backup' | 'diagnostics' | null>(null);
+  const [result, setResult] = useState<{ message: string; path: string } | null>(null);
 
   useEffect(() => {
-    const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-    if (IS_TAURI) {
+    if (isTauri) {
       invoke<string>('get_app_data_dir')
         .then(d => setDataDir(d))
         .catch(() => setDataDir('~/Library/Application Support/jp.zyxcorp.kazane'));
     } else {
       setDataDir('~/Library/Application Support/jp.zyxcorp.kazane');
     }
-  }, []);
+  }, [isTauri]);
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {
@@ -94,7 +103,21 @@ export function DataLocationPanel({ lang, onClose }: Props) {
     });
   }
 
-  const dbPath = dataDir ? `${dataDir}/kazane.db` : '読み込み中…';
+  async function runLocalOperation(kind: 'backup' | 'diagnostics') {
+    setBusy(kind);
+    setResult(null);
+    try {
+      const command = kind === 'backup' ? 'create_local_backup' : 'export_local_diagnostics';
+      const output = await invoke<{ path: string; sizeBytes: number; integrity: string }>(command);
+      setResult({ message: kind === 'backup' ? c.backupSuccess : c.diagSuccess, path: output.path });
+    } catch (error) {
+      setResult({ message: `${c.failed}: ${String(error)}`, path: '' });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const dbPath = dataDir ? `${dataDir}/kazane.db` : c.loadingPath;
   const backupDir = dataDir ? `${dataDir}/backups/` : '';
 
   return (
@@ -117,29 +140,30 @@ export function DataLocationPanel({ lang, onClose }: Props) {
         {/* Backup */}
         <Section label={c.backupLabel} color="#5fb89f">
           <div style={{ fontSize: 12, color: '#8a9ab0', marginBottom: 4 }}>{c.backupNote}</div>
-          <CodeLine text="scripts/kazane-agent backup" onCopy={copyToClipboard} />
+          <ActionButton disabled={!isTauri || busy !== null} onClick={() => runLocalOperation('backup')}>
+            {busy === 'backup' ? c.loading : c.createBackup}
+          </ActionButton>
+          {!isTauri && <div style={{ marginTop: 6, fontSize: 11, color: '#5b6370' }}>{c.appOnly}</div>}
         </Section>
 
         {/* Restore */}
         <Section label={c.recoverLabel} color="#d9a93f">
           <div style={{ fontSize: 12, color: '#8a9ab0', marginBottom: 4 }}>{c.restoreNote}</div>
-          <CodeLine text="scripts/kazane-agent backup-list" onCopy={copyToClipboard} />
-          <div style={{ marginTop: 4 }}>
-            <CodeLine text="scripts/kazane-agent restore backups/<filename>.db" onCopy={copyToClipboard} />
-          </div>
+          <div style={{ fontSize: 12, color: '#8a9ab0', lineHeight: 1.65 }}>{c.restoreGuide}</div>
         </Section>
 
         {/* Diagnostics */}
         <Section label={c.diagLabel} color="#a07fe0">
           <div style={{ fontSize: 12, color: '#8a9ab0', marginBottom: 4 }}>{c.diagNote}</div>
-          <CodeLine text="scripts/kazane-agent diagnostics" onCopy={copyToClipboard} />
+          <ActionButton disabled={!isTauri || busy !== null} onClick={() => runLocalOperation('diagnostics')}>
+            {busy === 'diagnostics' ? c.loading : c.exportDiagnostics}
+          </ActionButton>
         </Section>
 
-        {/* docs */}
-        <div style={{ marginTop: 20, padding: '10px 14px', background: '#1b1e25', borderRadius: 8, fontSize: 12, color: '#8a9ab0', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#5b6370' }}>📄</span>
-          <span>{c.docsLabel}: <span style={{ color: '#5b8def', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{c.docsPath}</span></span>
-        </div>
+        {result && <div style={{ marginTop: 20, padding: '10px 14px', background: '#1b1e25', borderRadius: 8, fontSize: 12, color: result.path ? '#8fcdb8' : '#e18989', lineHeight: 1.55 }}>
+          <div>{result.message}</div>
+          {result.path && <button onClick={() => revealItemInDir(result.path)} style={{ marginTop: 8, border: '1px solid #3b5d52', background: '#17231f', color: '#8fcdb8', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' }}>{c.showInFinder}</button>}
+        </div>}
 
         {/* tip */}
         <div style={{ marginTop: 12, fontSize: 12, color: '#5b6370', fontStyle: 'italic' }}>{c.tip}</div>
@@ -152,6 +176,10 @@ export function DataLocationPanel({ lang, onClose }: Props) {
       </div>
     </div>
   );
+}
+
+function ActionButton({ disabled, onClick, children }: { disabled: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button disabled={disabled} onClick={onClick} style={{ width: '100%', border: '1px solid #3b5d52', background: '#17231f', color: disabled ? '#607069' : '#8fcdb8', borderRadius: 7, padding: '9px 12px', cursor: disabled ? 'default' : 'pointer', fontSize: 12, fontWeight: 600 }}>{children}</button>;
 }
 
 function Section({ label, color, children }: { label: string; color: string; children: React.ReactNode }) {

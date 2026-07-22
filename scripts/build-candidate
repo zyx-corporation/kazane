@@ -17,7 +17,7 @@
 #   APPLE_TEAM_ID="XXXXXXXXXX" \
 #   scripts/build-candidate
 #
-# Without signing (unsigned candidate for local testing only):
+# Without Developer ID signing (local candidate for testing only):
 #   scripts/build-candidate --no-sign
 #
 # Output:
@@ -43,14 +43,23 @@ npm run build
 
 # ── 2. Rust / Tauri build ─────────────────────────────────────────────────
 if [ "$NO_SIGN" = true ]; then
-  echo "→ cargo build (unsigned)"
-  npm run tauri build -- --no-bundle 2>&1 | tail -5
-  # Copy .app for unsigned testing
+  echo "→ Tauri app + DMG bundle (unsigned local candidate)"
+  npm run tauri build -- --no-sign --bundles app,dmg
   APP_SRC="src-tauri/target/release/bundle/macos/Kazane.app"
+  DMG_PATH=$(find src-tauri/target/release/bundle/dmg -name "Kazane_${VERSION}_*.dmg" -print -quit)
   if [ ! -d "$APP_SRC" ]; then
-    echo "Warning: .app bundle not found at $APP_SRC, skipping copy" >&2
+    echo "Error: .app bundle not found at $APP_SRC" >&2
+    exit 1
   fi
-  echo "Unsigned build complete. No DMG produced."
+  if [ -z "$DMG_PATH" ] || [ ! -f "$DMG_PATH" ]; then
+    echo "Error: Kazane_${VERSION}_*.dmg not found" >&2
+    exit 1
+  fi
+  hdiutil verify "$DMG_PATH"
+  echo ""
+  echo "✓ Unsigned local candidate: $DMG_PATH"
+  echo "  App bundle: $APP_SRC"
+  echo "  Not suitable for external distribution."
   exit 0
 fi
 

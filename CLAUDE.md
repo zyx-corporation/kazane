@@ -296,10 +296,10 @@ v0.9へ進む。詳細な順序・依存・Evidence・出口条件は
 | WI-901 | backup/restoreと整合性検証 | ✅ done（round-trip 5テスト通過） |
 | WI-902 | 利用者・ロールモデル | ✅ done（migration v13・ADR-0004更新・role fixtures） |
 | WI-903 | ロール認可と監査の強制 | ✅ done（role-based authorize + 8テスト通過） |
-| WI-904 | first-run setupとdata/recovery案内 | 🔄 UI実装済み・clean-user app E2E待ち |
-| WI-905 | diagnosticsとsupport export bundle | ✅ done（kazane-agent diagnostics実装） |
+| WI-904 | first-run setupとdata/recovery案内 | 🔄 インストール版UIでbackup/diagnostics実機確認済み・別clean-user E2E待ち |
+| WI-905 | diagnosticsとsupport export bundle | ✅ done（CLIとアプリUI、個人情報非含有検査済み） |
 | WI-906 | Chronicle Replay hardening | inbox（WI-900完了待ち） |
-| WI-907 | 署名・notarization・candidate配布経路 | ⏸ build path実装済み・Developer ID／notarization待ち |
+| WI-907 | 署名・notarization・candidate配布経路 | ⏸ unsigned local DMG生成・検証済み、Developer ID／notarization待ち |
 | WI-908 | product・trust・support・pricing資料 | 🔄 draft作成済み・外部試用反映／承認待ち |
 | WI-909 | ADR-0014 Remote GUI境界の確定 | ✅ done（ADR Accepted/deferred・4前提条件明記） |
 | WI-910 | Product Candidate release rehearsal | inbox（WI-908完了後） |
