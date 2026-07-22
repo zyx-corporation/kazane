@@ -74,16 +74,19 @@ See [docs/design-principles.md](docs/design-principles.md).
 
 ## Current status
 
-Kazane is at `v0.8 hibiki / 響き` development stage. The local macOS app has
+Kazane is in `v0.9 utsuwa / 器` Product Candidate development. The local macOS app has
 SQLite-backed Work Items, Context Cards, Handoff Notes, Evidence and RDE views,
 GitHub Issue synchronization, an agent CLI, an MCP server, agent routing,
 concurrency locks, and a local push notification broker.
 
-The v0.8 external-beta workflow now includes partner onboarding, Feedback Context
+The v0.8 external-beta workflow includes partner onboarding, Feedback Context
 capture, a Trust & Privacy explanation, and Chronicle Replay. Phase A local process
 separation is implemented for `kazaned`, `kazane-privd`, and `kazane-agentd`.
-The remaining exit check requires an actual partner or trial user to validate that
-the workflow and one provenance chain are understandable.
+The remaining v0.8 exit check requires an actual partner or trial user to validate
+that the workflow and one provenance chain are understandable. v0.9 adds local
+backup/restore, user roles, enforced authorization, first-run data guidance, and
+diagnostics. Signed/notarized distribution and the clean-machine release rehearsal
+are not complete, so there is no public v0.9 candidate release yet.
 
 See [docs/roadmap.md](docs/roadmap.md).
 

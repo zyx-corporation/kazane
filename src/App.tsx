@@ -14,6 +14,7 @@ import type { OnboardingResult } from './components/OnboardingWizard';
 import { FeedbackContextModal } from './components/FeedbackContextModal';
 import type { FeedbackContextResult } from './components/FeedbackContextModal';
 import { TrustPrivacyPanel } from './components/TrustPrivacyPanel';
+import { DataLocationPanel } from './components/DataLocationPanel';
 import { FlowDashboard } from './screens/FlowDashboard';
 import { WorkBoard } from './screens/WorkBoard';
 import { ContextCards } from './screens/ContextCards';
@@ -112,6 +113,7 @@ export default function App() {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [trustOpen, setTrustOpen] = useState(false);
+  const [dataLocationOpen, setDataLocationOpen] = useState(false);
   const [form, setForm] = useState({ title: '', domain: '顧客対応', assignee: 'AI番頭', project: '' });
   const [toast, setToast] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => loadLangFromStorage());
@@ -166,6 +168,11 @@ export default function App() {
         setGateRules(gateRows);
         setAgentProfiles(agentRows);
         setDbReady(true);
+        // First-run: show data location panel once when DB is empty
+        if (rows.length === 0 && !localStorage.getItem('kz-data-info-shown')) {
+          localStorage.setItem('kz-data-info-shown', '1');
+          setDataLocationOpen(true);
+        }
       } catch (_) {
         if (!cancelled) setDbReady(false);
       }
@@ -677,7 +684,7 @@ export default function App() {
 
   return (
     <div style={s.root}>
-      <Sidebar current={screen} lang={lang} t={t} onNav={nav} onOnboarding={() => setOnboardingOpen(true)} onTrust={() => setTrustOpen(true)} />
+      <Sidebar current={screen} lang={lang} t={t} onNav={nav} onOnboarding={() => setOnboardingOpen(true)} onTrust={() => setTrustOpen(true)} onDataLocation={() => setDataLocationOpen(true)} />
 
       <main style={s.main}>
         {/* Header */}
@@ -816,6 +823,8 @@ export default function App() {
       )}
 
       {trustOpen && <TrustPrivacyPanel lang={lang} onClose={() => setTrustOpen(false)} />}
+
+      {dataLocationOpen && <DataLocationPanel lang={lang} onClose={() => setDataLocationOpen(false)} />}
 
       {/* Toast */}
       {toast && <Toast message={toast} />}

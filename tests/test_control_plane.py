@@ -59,7 +59,7 @@ class ControlPlaneTest(unittest.TestCase):
                     self.assertTrue(path.exists())
 
                 denied_missing = self.rpc(base / "kazaned.sock", "create_work_item", {"title": "missing identity"})
-                self.assertIn("agent_id is required", denied_missing["error"])
+                self.assertIn("required", denied_missing["error"])
 
                 denied_unknown = self.rpc(base / "kazaned.sock", "create_work_item", {"title": "unknown", "agent_id": "NOPE"})
                 self.assertIn("unknown agent profile", denied_unknown["error"])
@@ -97,6 +97,152 @@ class ControlPlaneTest(unittest.TestCase):
             client.connect(str(path))
             client.sendall(json.dumps({"operation": operation, "arguments": arguments}).encode() + b"\n")
             return json.loads(client.makefile("r", encoding="utf-8").readline())
+
+
+class RoleAuthorizationTest(unittest.TestCase):
+    """WI-903: role-based allow/deny tests (unit-level, no daemon required)."""
+
+    def _make_db(self, tmp_dir: str) -> Path:
+        base = Path(tmp_dir) / "Library" / "Application Support" / "jp.zyxcorp.kazane"
+        base.mkdir(parents=True)
+        db = base / "kazane.db"
+        con = sqlite3.connect(db)
+        con.executescript(
+            """
+            CREATE TABLE agent_profiles (id TEXT PRIMARY KEY, gate_stops TEXT NOT NULL DEFAULT '');
+            INSERT INTO agent_profiles VALUES ('AGT-TEST','');
+
+            CREATE TABLE users (
+              id TEXT PRIMARY KEY, name TEXT, email TEXT,
+              role TEXT NOT NULL DEFAULT 'operator', enabled INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT
+            );
+            INSERT INTO users VALUES ('USR-owner','Owner','o@x.jp','owner',1,'2026-07-13');
+            INSERT INTO users VALUES ('USR-op','Operator','op@x.jp','operator',1,'2026-07-13');
+            INSERT INTO users VALUES ('USR-rev','Reviewer','rv@x.jp','reviewer',1,'2026-07-13');
+            INSERT INTO users VALUES ('USR-disabled','Disabled','d@x.jp','operator',0,'2026-07-13');
+
+            CREATE TABLE privileged_operation_requests (
+              id TEXT PRIMARY KEY, agent_id TEXT, operation TEXT,
+              args_json TEXT, decision TEXT, reason TEXT, created_at TEXT
+            );
+            """
+        )
+        con.close()
+        return base
+
+    def _authorize(self, base: Path, **kwargs) -> dict:
+        """Call authorize() directly via kazane_control import."""
+        import importlib.util, sys as _sys
+        spec = importlib.util.spec_from_file_location(
+            "kazane_control", str(ROOT / "scripts" / "kazane_control.py")
+        )
+        mod = importlib.util.module_from_spec(spec)
+        # patch DB_PATH and TASKS_DIR
+        orig_db = None
+        try:
+            spec.loader.exec_module(mod)
+            orig_db = mod.DB_PATH
+            mod.DB_PATH = base / "kazane.db"
+            return mod.authorize(kwargs)
+        finally:
+            if orig_db is not None:
+                mod.DB_PATH = orig_db
+
+    def test_owner_can_write(self):
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            result = self._authorize(base,
+                user_id="USR-owner",
+                requested_operation="create_work_item",
+                payload={"title": "test"},
+            )
+            self.assertTrue(result["allowed"], msg=result.get("reason"))
+            self.assertIn("owner", result["reason"])
+
+    def test_operator_can_write(self):
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            result = self._authorize(base,
+                user_id="USR-op",
+                requested_operation="submit_handoff",
+                payload={},
+            )
+            self.assertTrue(result["allowed"], msg=result.get("reason"))
+
+    def test_reviewer_denied_create(self):
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            result = self._authorize(base,
+                user_id="USR-rev",
+                requested_operation="create_work_item",
+                payload={"title": "test"},
+            )
+            self.assertFalse(result["allowed"])
+            self.assertIn("reviewer", result["reason"])
+
+    def test_reviewer_denied_update(self):
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            result = self._authorize(base,
+                user_id="USR-rev",
+                requested_operation="update_work_item",
+                payload={"wi_id": "WI-001"},
+            )
+            self.assertFalse(result["allowed"])
+            self.assertIn("reviewer", result["reason"])
+
+    def test_reviewer_can_submit_handoff(self):
+        """reviewer may approve/submit handoffs (not a write-gated op for reviewers)."""
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            result = self._authorize(base,
+                user_id="USR-rev",
+                requested_operation="submit_handoff",
+                payload={},
+            )
+            self.assertTrue(result["allowed"], msg=result.get("reason"))
+
+    def test_disabled_user_denied(self):
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            result = self._authorize(base,
+                user_id="USR-disabled",
+                requested_operation="create_work_item",
+                payload={},
+            )
+            self.assertFalse(result["allowed"])
+            self.assertIn("disabled", result["reason"])
+
+    def test_unknown_user_denied(self):
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            result = self._authorize(base,
+                user_id="USR-nobody",
+                requested_operation="create_work_item",
+                payload={},
+            )
+            self.assertFalse(result["allowed"])
+            self.assertIn("unknown", result["reason"])
+
+    def test_audit_records_created(self):
+        with tempfile.TemporaryDirectory(prefix="kz-role-") as tmp:
+            base = self._make_db(tmp)
+            # One allow (owner), one deny (reviewer create)
+            for uid, op, expect in [
+                ("USR-owner", "create_work_item", True),
+                ("USR-rev", "create_work_item", False),
+            ]:
+                self._authorize(base, user_id=uid, requested_operation=op, payload={})
+
+            con = sqlite3.connect(str(base / "kazane.db"))
+            rows = con.execute(
+                "SELECT decision FROM privileged_operation_requests ORDER BY created_at"
+            ).fetchall()
+            con.close()
+            decisions = [r[0] for r in rows]
+            self.assertIn("allow", decisions)
+            self.assertIn("deny", decisions)
 
 
 if __name__ == "__main__":

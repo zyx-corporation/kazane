@@ -37,8 +37,8 @@ codesign --force --deep --sign - src-tauri/target/release/bundle/macos/Kazane.ap
 codesign --verify --deep --strict src-tauri/target/release/bundle/macos/Kazane.app
 hdiutil create -volname Kazane \
   -srcfolder src-tauri/target/release/bundle/macos/Kazane.app \
-  -ov -format UDZO src-tauri/target/release/bundle/dmg/Kazane_0.8.0_aarch64.dmg
-hdiutil verify src-tauri/target/release/bundle/dmg/Kazane_0.8.0_aarch64.dmg
+  -ov -format UDZO src-tauri/target/release/bundle/dmg/Kazane_0.9.0_aarch64.dmg
+hdiutil verify src-tauri/target/release/bundle/dmg/Kazane_0.9.0_aarch64.dmg
 rm -rf /Applications/Kazane.app
 ditto src-tauri/target/release/bundle/macos/Kazane.app /Applications/Kazane.app
 open -a /Applications/Kazane.app

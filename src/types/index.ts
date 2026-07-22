@@ -5,6 +5,30 @@ export type DrawerTab = 'context' | 'handoff' | 'evidence' | 'rde' | 'gate' | 't
 export type Risk = '高' | '中' | '低';
 export type TrustLevel = '高' | '中' | '低';
 export type DeviationRisk = 'low' | 'medium' | 'high';
+export type UserRole = 'owner' | 'operator' | 'reviewer' | 'agent';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  owner:    'オーナー',
+  operator: 'オペレーター',
+  reviewer: 'レビュアー',
+  agent:    'エージェント',
+};
+
+export const USER_ROLE_MATRIX: Record<UserRole, string[]> = {
+  owner:    ['WI読み取り', 'WI作成', 'WI編集', 'WI削除', 'Handoff提出', 'Handoffレビュー', 'Evidence追加', 'ロール管理', '特権操作承認'],
+  operator: ['WI読み取り', 'WI作成', 'WI編集', 'Handoff提出', 'Handoffレビュー', 'Evidence追加'],
+  reviewer: ['WI読み取り', 'Handoffレビュー'],
+  agent:    ['WI読み取り', 'WI作成', 'WI編集', 'Handoff提出', 'Evidence追加'],
+};
 
 export interface EvidenceEntry {
   type: string;

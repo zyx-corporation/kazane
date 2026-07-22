@@ -257,12 +257,34 @@ fn migrations() -> Vec<Migration> {
             ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "create_users_table",
+            sql: "
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    role TEXT NOT NULL DEFAULT 'operator',
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+            ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
 #[tauri::command]
 fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+async fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
+    app.path().app_data_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -363,6 +385,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_version,
+            get_app_data_dir,
             get_agent_dirs,
             write_agent_task,
             poll_agent_handoffs,

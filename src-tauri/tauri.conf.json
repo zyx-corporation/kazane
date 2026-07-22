@@ -1,6 +1,6 @@
 {
   "productName": "Kazane",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "identifier": "jp.zyxcorp.kazane",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -33,6 +33,11 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": null,
+      "minimumSystemVersion": "13.0",
+      "entitlements": "entitlements.plist"
+    }
   }
 }
