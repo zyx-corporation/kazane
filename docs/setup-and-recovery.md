@@ -8,7 +8,7 @@ Kazane のすべてのデータはローカルの macOS ユーザーディレク
 ```
 ~/Library/Application Support/jp.zyxcorp.kazane/
 ├── kazane.db          — SQLiteデータベース（全Work Item・Context・Handoff・Evidence）
-├── backups/           — kazane-agent backup で作成したバックアップ
+├── backups/           — アプリまたはkazane-agentで作成したバックアップ
 ├── tasks/             — エージェントへの未割り当てタスクキュー（JSON）
 ├── handoffs/          — エージェントが書き出したHandoff Note（JSON）
 ├── kazane-agentd.sock — Push通知ブローカーのUnixソケット（起動中のみ）
@@ -29,6 +29,10 @@ Kazane のすべてのデータはローカルの macOS ユーザーディレク
    ```
 
 ## バックアップ
+
+通常はKazaneの「Data Location / データの保存場所」を開き、
+「バックアップを作成」を押します。リポジトリやコマンド操作は不要です。
+保守運用では以下のCLIも利用できます。
 
 ```bash
 # デフォルト場所（~/Library/Application Support/jp.zyxcorp.kazane/backups/）に保存
@@ -60,7 +64,9 @@ scripts/kazane-agent backup-list
 
 ## サポート情報の収集
 
-問題が発生した場合、以下で診断情報をエクスポートできます（メールアドレスは自動的に伏字になります）：
+問題が発生した場合は「Data Location / データの保存場所」の
+「診断情報を出力」を押します。出力にはメールアドレス、氏名、レコード本文、
+ローカル絶対パスを含めません。保守運用では以下のCLIも利用できます。
 
 ```bash
 scripts/kazane-agent diagnostics

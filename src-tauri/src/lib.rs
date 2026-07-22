@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
+use sqlx::Connection;
 use std::io::Write;
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -49,6 +51,28 @@ pub struct ContextCardRow {
 pub struct AgentDirs {
     pub tasks_dir: String,
     pub handoffs_dir: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFileResult {
+    pub path: String,
+    pub size_bytes: u64,
+    pub integrity: String,
+}
+
+fn sqlite_string(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+async fn open_sqlite(path: &std::path::Path, read_only: bool) -> Result<SqliteConnection, String> {
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .read_only(read_only)
+        .create_if_missing(false);
+    SqliteConnection::connect_with(&options)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn migrations() -> Vec<Migration> {
@@ -288,6 +312,136 @@ async fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn create_local_backup(app: tauri::AppHandle) -> Result<LocalFileResult, String> {
+    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let db_path = base.join("kazane.db");
+    if !db_path.is_file() {
+        return Err(format!("database not found: {}", db_path.display()));
+    }
+
+    let backup_dir = base.join("backups");
+    std::fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S_%3f");
+    let backup_path = backup_dir.join(format!("kazane_{stamp}.db"));
+
+    let mut source = open_sqlite(&db_path, false).await?;
+    let backup_sql = format!(
+        "VACUUM INTO '{}'",
+        sqlite_string(&backup_path.to_string_lossy())
+    );
+    if let Err(error) = sqlx::query(&backup_sql).execute(&mut source).await {
+        let _ = std::fs::remove_file(&backup_path);
+        return Err(error.to_string());
+    }
+    source.close().await.map_err(|e| e.to_string())?;
+
+    let mut backup = open_sqlite(&backup_path, true).await?;
+    let integrity: String = sqlx::query_scalar("PRAGMA integrity_check")
+        .fetch_one(&mut backup)
+        .await
+        .map_err(|e| e.to_string())?;
+    backup.close().await.map_err(|e| e.to_string())?;
+    if integrity != "ok" {
+        let _ = std::fs::remove_file(&backup_path);
+        return Err(format!("backup integrity check failed: {integrity}"));
+    }
+
+    let size_bytes = std::fs::metadata(&backup_path)
+        .map_err(|e| e.to_string())?
+        .len();
+    Ok(LocalFileResult {
+        path: backup_path.to_string_lossy().into_owned(),
+        size_bytes,
+        integrity,
+    })
+}
+
+#[tauri::command]
+async fn export_local_diagnostics(app: tauri::AppHandle) -> Result<LocalFileResult, String> {
+    let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let db_path = base.join("kazane.db");
+    if !db_path.is_file() {
+        return Err(format!("database not found: {}", db_path.display()));
+    }
+
+    let mut connection = open_sqlite(&db_path, true).await?;
+    let integrity: String = sqlx::query_scalar("PRAGMA integrity_check")
+        .fetch_one(&mut connection)
+        .await
+        .map_err(|e| e.to_string())?;
+    let migration_version: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations"
+    )
+    .fetch_one(&mut connection)
+    .await
+    .unwrap_or(0);
+
+    let table_names: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_%' ESCAPE '\\' ORDER BY name"
+    )
+    .fetch_all(&mut connection)
+    .await
+    .map_err(|e| e.to_string())?;
+    let mut table_counts = serde_json::Map::new();
+    for table in table_names {
+        let safe_table = table.replace('"', "\"\"");
+        let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM \"{safe_table}\""))
+            .fetch_one(&mut connection)
+            .await
+            .map_err(|e| e.to_string())?;
+        table_counts.insert(table, serde_json::json!(count));
+    }
+
+    let role_rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT role, COUNT(*) FROM users WHERE enabled=1 GROUP BY role ORDER BY role"
+    )
+    .fetch_all(&mut connection)
+    .await
+    .unwrap_or_default();
+    connection.close().await.map_err(|e| e.to_string())?;
+
+    let backup_count = std::fs::read_dir(base.join("backups"))
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "db"))
+        .count();
+    let db_size_bytes = std::fs::metadata(&db_path)
+        .map_err(|e| e.to_string())?
+        .len();
+    let roles = role_rows
+        .into_iter()
+        .map(|(role, count)| serde_json::json!({ "role": role, "count": count }))
+        .collect::<Vec<_>>();
+    let generated_at = chrono::Local::now();
+    let payload = serde_json::json!({
+        "generated_at": generated_at.to_rfc3339(),
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "platform": std::env::consts::OS,
+        "architecture": std::env::consts::ARCH,
+        "db_size_bytes": db_size_bytes,
+        "db_integrity": integrity,
+        "migration_version": migration_version,
+        "backup_count": backup_count,
+        "table_row_counts": table_counts,
+        "enabled_user_roles": roles,
+        "privacy": "No email addresses, names, record bodies, or local absolute paths are included."
+    });
+    let output_path = base.join(format!(
+        "kazane_diagnostics_{}.json",
+        generated_at.format("%Y%m%d_%H%M%S_%3f")
+    ));
+    let bytes = serde_json::to_vec_pretty(&payload).map_err(|e| e.to_string())?;
+    std::fs::write(&output_path, &bytes).map_err(|e| e.to_string())?;
+    Ok(LocalFileResult {
+        path: output_path.to_string_lossy().into_owned(),
+        size_bytes: bytes.len() as u64,
+        integrity,
+    })
+}
+
+#[tauri::command]
 async fn get_agent_dirs(app: tauri::AppHandle) -> Result<AgentDirs, String> {
     let base = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let tasks_dir = base.join("tasks");
@@ -386,6 +540,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_version,
             get_app_data_dir,
+            create_local_backup,
+            export_local_diagnostics,
             get_agent_dirs,
             write_agent_task,
             poll_agent_handoffs,
