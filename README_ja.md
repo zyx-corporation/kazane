@@ -57,6 +57,8 @@ Kazane は、Prototype First、TDD / Test First、T-RDE、GitHub Issue と紐づ
 
 Kazane は、AI Native Development の有用なインタラクション設計を取り込みつつ、AI IDE には還元されない Chronicle Work OS として発展させます。Living PRD、AI Activity Timeline、Micro Change Workflow、Chronicle Diff、Intent Graph などの追加仕様は [docs/chronicle-native-work-extensions.md](docs/chronicle-native-work-extensions.md) を参照してください。
 
+AIで大量の業務を圧縮しながら、目的、関係、意味、責任、証跡、可逆性、継承可能性を失わせないための定義、55件の具体例、実装要件、受入条件は [docs/context-preserving-work.md](docs/context-preserving-work.md) を参照してください。
+
 ## 設計原則
 
 1. 自動化より文脈主権を優先する。
